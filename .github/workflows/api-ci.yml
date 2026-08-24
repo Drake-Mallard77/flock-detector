@@ -1,0 +1,52 @@
+name: api-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Default to read-only; no job here needs to write anything.
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: services/api
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      # Actions are pinned to a commit SHA, not a floating tag (e.g. @v4) —
+      # a compromised tag on a widely-used action is a real supply-chain
+      # vector, and this repo publishes public-records claims where a
+      # tampered build is a meaningfully worse outcome than most projects.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: services/api/go.mod
+          cache-dependency-path: services/api/go.sum
+
+      - name: go build
+        run: go build ./...
+      - name: go vet
+        run: go vet ./...
+      - name: gofmt check
+        run: |
+          fmt_out="$(gofmt -l .)"
+          if [ -n "$fmt_out" ]; then
+            echo "The following files are not gofmt-formatted:"
+            echo "$fmt_out"
+            exit 1
+          fi
+      # Runs the full suite, including the testcontainers-go integration
+      # tests in internal/httpapi — GitHub-hosted ubuntu runners have Docker
+      # available by default, no extra setup needed.
+      - name: go test
+        run: go test ./... -v
+
+      # Known-CVE scan against the exact dependency versions in go.sum.
+      # Complements Dependabot (which flags outdated/vulnerable deps in the
+      # repo) by checking at build time too.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
