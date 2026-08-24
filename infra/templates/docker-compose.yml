@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: flockwatch
+      POSTGRES_USER: flockwatch
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flockwatch -d flockwatch"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  app:
+    image: ${APP_IMAGE}
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://flockwatch:${DB_PASSWORD}@db:5432/flockwatch
+      ADMIN_USERNAME: ${ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      TRUST_PROXY: 1
+    ports:
+      - "80:8080"
+volumes:
+  postgres_data:

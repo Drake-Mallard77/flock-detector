@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: flockwatch
+      POSTGRES_USER: flockwatch
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flockwatch -d flockwatch"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  app:
+    build: .
+    image: ${APP_IMAGE:-ghcr.io/drake-mallard77/flock-detector:latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://flockwatch:${DB_PASSWORD}@db:5432/flockwatch
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD}
+      TRUST_PROXY: 1
+    ports:
+      - "80:8080"
+volumes:
+  postgres_data:
