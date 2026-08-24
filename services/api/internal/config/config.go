@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 )
 
@@ -28,6 +29,20 @@ func Load() Config {
 // ever enabled outside production.
 func (c Config) DevAuthEnabled() bool {
 	return c.Env != "production"
+}
+
+const defaultJWTSecret = "dev-secret-change-me"
+
+// RequireSecureSecrets reports an error if the server is configured to run
+// in production with a default/placeholder secret. JWT_SECRET signs the
+// tokens that authorize moderator actions (approving/rejecting/removing
+// public records) — deploying with the well-known default would let anyone
+// forge a moderator token.
+func (c Config) RequireSecureSecrets() error {
+	if c.Env == "production" && c.JWTSecret == defaultJWTSecret {
+		return fmt.Errorf("JWT_SECRET must be overridden when ENV=production (refusing to start with the default secret)")
+	}
+	return nil
 }
 
 func getenv(key, fallback string) string {

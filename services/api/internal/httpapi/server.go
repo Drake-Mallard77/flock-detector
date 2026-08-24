@@ -3,22 +3,38 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/time/rate"
 
 	"flockwatch/api/internal/config"
 )
 
+// submissionRate/submissionBurst bound public write endpoints: 3 immediate
+// requests per IP, refilling at 1 every 10s. See ratelimit.go for why this
+// is treated as a data-integrity control, not just abuse prevention.
+const (
+	submissionRate       = rate.Limit(1.0 / 10.0)
+	submissionBurst      = 3
+	submissionStaleAfter = 10 * time.Minute
+)
+
 type Server struct {
-	db  *pgxpool.Pool
-	cfg config.Config
+	db                *pgxpool.Pool
+	cfg               config.Config
+	submissionLimiter *submissionRateLimiter
 }
 
 func NewServer(db *pgxpool.Pool, cfg config.Config) *Server {
-	return &Server{db: db, cfg: cfg}
+	return &Server{
+		db:                db,
+		cfg:               cfg,
+		submissionLimiter: newSubmissionRateLimiter(submissionRate, submissionBurst, submissionStaleAfter),
+	}
 }
 
 func (s *Server) Router() http.Handler {
@@ -39,14 +55,14 @@ func (s *Server) Router() http.Handler {
 
 	r.Route("/deployments", func(r chi.Router) {
 		r.Get("/", s.handleListDeployments)
-		r.Post("/", s.handleCreateDeployment)
+		r.With(s.submissionLimiter.middleware).Post("/", s.handleCreateDeployment)
 		r.Get("/{id}", s.handleGetDeployment)
 		r.With(s.requireRole("moderator", "admin")).Post("/{id}/review", s.handleReviewDeployment)
 	})
 
 	r.Route("/cameras", func(r chi.Router) {
 		r.Get("/", s.handleListCameras)
-		r.Post("/", s.handleCreateCamera)
+		r.With(s.submissionLimiter.middleware).Post("/", s.handleCreateCamera)
 	})
 
 	// Dev-only auth stub: issues a JWT for local testing without wiring up

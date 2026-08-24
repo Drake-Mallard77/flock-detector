@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"path"
 	"sort"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -48,7 +49,10 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool, migrationsFS fs.FS, migrat
 			continue
 		}
 
-		contents, err := fs.ReadFile(migrationsFS, migrationsDir+"/"+name)
+		// path.Join (not manual concatenation) so migrationsDir == "." works
+		// too: path.Join(".", name) cleans to just "name", which io/fs
+		// requires (a literal "./name" is not a fs.ValidPath).
+		contents, err := fs.ReadFile(migrationsFS, path.Join(migrationsDir, name))
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", name, err)
 		}

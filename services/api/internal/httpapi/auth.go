@@ -43,9 +43,12 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 			return
 		}
 
+		// WithValidMethods pins verification to HS256: without it, a party
+		// that doesn't know JWTSecret could still craft a token using a
+		// different algorithm (e.g. "none") that some parsers accept.
 		token, err := jwt.ParseWithClaims(tokenStr, &claims{}, func(t *jwt.Token) (interface{}, error) {
 			return []byte(s.cfg.JWTSecret), nil
-		})
+		}, jwt.WithValidMethods([]string{"HS256"}))
 		if err != nil || !token.Valid {
 			writeError(w, http.StatusUnauthorized, "invalid token")
 			return

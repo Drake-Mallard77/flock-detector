@@ -68,23 +68,23 @@ func IsValidDeploymentStatus(v string) bool {
 // Deployment is the primary, agency/contract-level record: what FlockWatch's
 // "Public Records Atlas" shows by default, at city-level precision.
 type Deployment struct {
-	ID               string           `json:"id"`
-	AgencyName       string           `json:"agency_name"`
-	City             string           `json:"city"`
-	State            string           `json:"state"`
-	County           *string          `json:"county,omitempty"`
-	Lat              *float64         `json:"lat,omitempty"`
-	Lng              *float64         `json:"lng,omitempty"`
-	DocumentedUnits  *int             `json:"documented_units,omitempty"`
-	EvidenceType     EvidenceType     `json:"evidence_type"`
-	SourceLinks      []string         `json:"source_links"`
-	Status           DeploymentStatus `json:"status"`
-	Notes            *string          `json:"notes,omitempty"`
-	CreatedBy        *string          `json:"created_by,omitempty"`
-	ReviewedBy       *string          `json:"reviewed_by,omitempty"`
-	LastReviewedAt   *time.Time       `json:"last_reviewed_at,omitempty"`
-	CreatedAt        time.Time        `json:"created_at"`
-	UpdatedAt        time.Time        `json:"updated_at"`
+	ID              string           `json:"id"`
+	AgencyName      string           `json:"agency_name"`
+	City            string           `json:"city"`
+	State           string           `json:"state"`
+	County          *string          `json:"county,omitempty"`
+	Lat             *float64         `json:"lat,omitempty"`
+	Lng             *float64         `json:"lng,omitempty"`
+	DocumentedUnits *int             `json:"documented_units,omitempty"`
+	EvidenceType    EvidenceType     `json:"evidence_type"`
+	SourceLinks     []string         `json:"source_links"`
+	Status          DeploymentStatus `json:"status"`
+	Notes           *string          `json:"notes,omitempty"`
+	CreatedBy       *string          `json:"created_by,omitempty"`
+	ReviewedBy      *string          `json:"reviewed_by,omitempty"`
+	LastReviewedAt  *time.Time       `json:"last_reviewed_at,omitempty"`
+	CreatedAt       time.Time        `json:"created_at"`
+	UpdatedAt       time.Time        `json:"updated_at"`
 }
 
 // CameraSighting is the opt-in, precise-pin layer: exact camera locations

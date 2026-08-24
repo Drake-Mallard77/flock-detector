@@ -21,6 +21,9 @@ var migrationsFS embed.FS
 
 func main() {
 	cfg := config.Load()
+	if err := cfg.RequireSecureSecrets(); err != nil {
+		log.Fatal(err)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
