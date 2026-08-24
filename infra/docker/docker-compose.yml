@@ -1,0 +1,41 @@
+# Local development stack: Postgres+PostGIS and the Go API.
+# The production compose file (used by cloud-init on the OCI VM) additionally
+# adds Caddy for TLS termination — see infra/cloud-init/ once Phase 2 lands.
+name: flockwatch-dev
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: flockwatch
+      POSTGRES_PASSWORD: flockwatch
+      POSTGRES_DB: flockwatch
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flockwatch -d flockwatch"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ../../services/api
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      DATABASE_URL: "postgres://flockwatch:flockwatch@postgres:5432/flockwatch?sslmode=disable"
+      JWT_SECRET: "dev-secret-change-me"
+      ALLOWED_ORIGIN: "http://localhost:5173"
+      ENV: "development"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

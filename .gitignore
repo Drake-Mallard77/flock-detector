@@ -1,0 +1,27 @@
+# Go
+services/api/flockwatch-api
+services/importer/importer
+*.exe
+*.test
+
+# Node / web / mobile (populated in later phases)
+node_modules/
+dist/
+.expo/
+.env
+.env.local
+
+# Terraform
+infra/terraform/**/.terraform/
+infra/terraform/**/*.tfstate
+infra/terraform/**/*.tfstate.*
+infra/terraform/**/*.tfvars
+infra/terraform/**/.terraform.lock.hcl
+!infra/terraform/**/*.tfvars.example
+crash.log
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
