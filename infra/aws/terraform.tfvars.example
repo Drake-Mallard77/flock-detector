@@ -1,0 +1,5 @@
+region="us-east-1"
+admin_password="replace-with-16-plus-characters"
+db_password="replace-with-another-16-plus-characters"
+ssh_public_key="ssh-ed25519 AAAA..."
+ssh_source_cidr="203.0.113.10/32"

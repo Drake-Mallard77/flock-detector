@@ -1,0 +1,21 @@
+#cloud-config
+package_update: true
+packages:
+  - curl
+  - ca-certificates
+  - git
+write_files:
+  - path: /opt/flockwatch/docker-compose.yml.b64
+    permissions: "0600"
+    content: ${compose_b64}
+  - path: /opt/flockwatch/env.b64
+    permissions: "0600"
+    content: ${env_b64}
+runcmd:
+  - [ sh, -c, "curl -fsSL https://get.docker.com | sh" ]
+  - [ sh, -c, "base64 -d /opt/flockwatch/docker-compose.yml.b64 > /opt/flockwatch/docker-compose.yml" ]
+  - [ sh, -c, "base64 -d /opt/flockwatch/env.b64 > /opt/flockwatch/.env" ]
+  - [ sh, -c, "chmod 600 /opt/flockwatch/.env && rm -f /opt/flockwatch/*.b64" ]
+  - [ sh, -c, "cd /opt/flockwatch && docker compose pull db" ]
+  - [ sh, -c, "cd /opt/flockwatch && APP_IMAGE=$(sed -n 's/^APP_IMAGE=//p' .env) && (docker pull \"$APP_IMAGE\" || (git clone --depth 1 https://github.com/Drake-Mallard77/flock-detector.git /opt/flockwatch/source && docker build -t \"$APP_IMAGE\" /opt/flockwatch/source))" ]
+  - [ sh, -c, "cd /opt/flockwatch && docker compose up -d" ]
