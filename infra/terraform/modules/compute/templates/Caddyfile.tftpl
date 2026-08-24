@@ -1,0 +1,13 @@
+%{ if domain != "" }
+${domain} {
+	reverse_proxy api:8080
+}
+%{ else }
+# No domain set yet: serve plain HTTP on the bare IP so the first deploy is
+# reachable immediately. Once a domain is set (and, per docs/ARCHITECTURE.md,
+# once Cloudflare fronts this), re-render with `domain` set to get Caddy's
+# automatic HTTPS instead.
+:80 {
+	reverse_proxy api:8080
+}
+%{ endif }

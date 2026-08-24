@@ -1,0 +1,56 @@
+#cloud-config
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+
+write_files:
+  - path: /opt/flockwatch/docker-compose.prod.yml.b64
+    permissions: "0600"
+    content: ${base64encode(compose_content)}
+  - path: /opt/flockwatch/Caddyfile.b64
+    permissions: "0600"
+    content: ${base64encode(caddyfile_content)}
+  - path: /opt/flockwatch/.env.b64
+    permissions: "0600"
+    content: ${base64encode(env_content)}
+
+runcmd:
+  # --- Docker Engine via the official apt repo (GPG-verified), not a
+  # curl-pipe-to-sh installer: this VM runs unattended and the install
+  # script only runs once at boot, so it's worth the extra rigor. ---
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - >-
+    sh -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc]
+    https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable"
+    > /etc/apt/sources.list.d/docker.list'
+  - apt-get update -y
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+  # --- Mount the separately-attached, backed-up data volume at a fixed
+  # path. Polls for the device rather than assuming it's already visible:
+  # the volume attachment (infra/terraform/modules/storage) can complete
+  # slightly after this instance finishes booting, since Terraform can only
+  # attach a volume to an instance that already exists. Never reformats a
+  # volume that already has a filesystem — that would be a rebuilt instance
+  # destroying the real production database on every redeploy. ---
+  - >-
+    sh -c 'for i in $(seq 1 30); do [ -b ${data_volume_device} ] && break; sleep 10; done'
+  - >-
+    sh -c 'blkid ${data_volume_device} || mkfs.ext4 ${data_volume_device}'
+  - mkdir -p /mnt/flockwatch-data
+  - >-
+    sh -c 'grep -q "${data_volume_device}" /etc/fstab ||
+    echo "${data_volume_device} /mnt/flockwatch-data ext4 defaults,nofail 0 2" >> /etc/fstab'
+  - mount -a
+
+  # --- Decode the app bundle and start it. ---
+  - mkdir -p /opt/flockwatch
+  - sh -c 'base64 -d /opt/flockwatch/docker-compose.prod.yml.b64 > /opt/flockwatch/docker-compose.yml'
+  - sh -c 'base64 -d /opt/flockwatch/Caddyfile.b64 > /opt/flockwatch/Caddyfile'
+  - sh -c 'base64 -d /opt/flockwatch/.env.b64 > /opt/flockwatch/.env'
+  - sh -c 'chmod 600 /opt/flockwatch/.env && rm -f /opt/flockwatch/*.b64'
+  - sh -c 'cd /opt/flockwatch && docker compose up -d'

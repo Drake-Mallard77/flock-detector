@@ -1,0 +1,55 @@
+# Static, not templated: only .env and the Caddyfile carry environment-
+# specific values, matching cloud-init.yaml.tftpl's write_files. Postgres
+# data lives on the separately-attached, backed-up volume (mounted at
+# /mnt/flockwatch-data by cloud-init) rather than the boot volume, so a
+# rebuilt/replaced instance doesn't lose the database.
+name: flockwatch
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: flockwatch
+      POSTGRES_DB: flockwatch
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - /mnt/flockwatch-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flockwatch -d flockwatch"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  api:
+    image: ${APP_IMAGE}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://flockwatch:${DB_PASSWORD}@postgres:5432/flockwatch?sslmode=disable
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN}
+      ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  caddy_data:
+  caddy_config:
