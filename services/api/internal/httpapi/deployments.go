@@ -108,6 +108,10 @@ func (s *Server) handleCreateDeployment(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "agency_name, city, state, and evidence_type are required")
 		return
 	}
+	if !models.IsValidEvidenceType(req.EvidenceType) {
+		writeError(w, http.StatusBadRequest, "invalid evidence_type, must be one of: "+joinEvidenceTypes())
+		return
+	}
 	if req.SourceLinks == nil {
 		req.SourceLinks = []string{}
 	}
@@ -148,11 +152,8 @@ func (s *Server) handleReviewDeployment(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	switch models.DeploymentStatus(req.Status) {
-	case models.StatusConfirmed, models.StatusContractFound, models.StatusUnderReview,
-		models.StatusDisputed, models.StatusRemoved:
-	default:
-		writeError(w, http.StatusBadRequest, "invalid status")
+	if !models.IsValidDeploymentStatus(req.Status) {
+		writeError(w, http.StatusBadRequest, "invalid status, must be one of: "+joinDeploymentStatuses())
 		return
 	}
 

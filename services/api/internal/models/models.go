@@ -32,6 +32,39 @@ const (
 	EvidenceOSMImport     EvidenceType = "osm_import"
 )
 
+// ValidEvidenceTypes lists every evidence_type value the deployments table's
+// CHECK constraint (migrations/0001_init.sql) accepts. Handlers validate
+// against this before hitting the DB so a bad value comes back as a 400 with
+// a clear message instead of a generic 500 from the constraint violation.
+var ValidEvidenceTypes = []EvidenceType{
+	EvidenceCouncilReport, EvidenceContract, EvidenceInvoice,
+	EvidenceNewsArticle, EvidenceFOIAResponse, EvidenceUserPhoto, EvidenceOSMImport,
+}
+
+func IsValidEvidenceType(v string) bool {
+	for _, e := range ValidEvidenceTypes {
+		if string(e) == v {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidDeploymentStatuses lists every status value the deployments table's
+// CHECK constraint accepts.
+var ValidDeploymentStatuses = []DeploymentStatus{
+	StatusConfirmed, StatusContractFound, StatusUnderReview, StatusDisputed, StatusRemoved,
+}
+
+func IsValidDeploymentStatus(v string) bool {
+	for _, s := range ValidDeploymentStatuses {
+		if string(s) == v {
+			return true
+		}
+	}
+	return false
+}
+
 // Deployment is the primary, agency/contract-level record: what FlockWatch's
 // "Public Records Atlas" shows by default, at city-level precision.
 type Deployment struct {
