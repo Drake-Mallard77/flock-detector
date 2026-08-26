@@ -35,6 +35,8 @@ export interface Deployment {
   source_links: string[];
   status: DeploymentStatus;
   notes?: string;
+  /** law_enforcement | government | education | private | unknown */
+  operator_type?: string;
   last_reviewed_at?: string;
   created_at: string;
   updated_at: string;
@@ -166,6 +168,20 @@ export function googleLogin(credential: string) {
 
 export function getMe() {
   return request<Me>("/auth/me");
+}
+
+/**
+ * Sets the same status on many deployments at once.
+ *
+ * Exists for the OSM-derived candidate queue, which runs to hundreds of
+ * records. The server caps a single call at 200 and records the reviewer on
+ * every row, so a bulk decision stays as attributable as an individual one.
+ */
+export function bulkReviewDeployments(ids: string[], status: DeploymentStatus) {
+  return request<{ status: string; updated: number }>("/deployments/bulk-review", {
+    method: "POST",
+    body: JSON.stringify({ ids, status }),
+  });
 }
 
 export function reviewDeployment(id: string, status: DeploymentStatus) {

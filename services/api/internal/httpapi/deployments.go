@@ -47,6 +47,7 @@ func (s *Server) handleListDeployments(w http.ResponseWriter, r *http.Request) {
 		SELECT id, agency_name, city, state, county,
 		       ST_Y(location::geometry), ST_X(location::geometry),
 		       documented_units, evidence_type, source_links, status, notes,
+		       operator_type,
 		       created_by, reviewed_by, last_reviewed_at, created_at, updated_at
 		FROM deployments
 		WHERE ($1 = '' OR state = $1)
@@ -89,6 +90,7 @@ func (s *Server) handleGetDeployment(w http.ResponseWriter, r *http.Request) {
 		SELECT id, agency_name, city, state, county,
 		       ST_Y(location::geometry), ST_X(location::geometry),
 		       documented_units, evidence_type, source_links, status, notes,
+		       operator_type,
 		       created_by, reviewed_by, last_reviewed_at, created_at, updated_at
 		FROM deployments WHERE id = $1
 	`, id)
@@ -207,6 +209,7 @@ func scanDeployment(r row) (models.Deployment, error) {
 		&d.ID, &d.AgencyName, &d.City, &d.State, &d.County,
 		&d.Lat, &d.Lng,
 		&d.DocumentedUnits, &d.EvidenceType, &d.SourceLinks, &d.Status, &d.Notes,
+		&d.OperatorType,
 		&d.CreatedBy, &d.ReviewedBy, &d.LastReviewedAt, &d.CreatedAt, &d.UpdatedAt,
 	)
 	return d, err

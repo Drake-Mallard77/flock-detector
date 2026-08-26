@@ -300,3 +300,102 @@ func TestListDeployments_Search(t *testing.T) {
 		t.Errorf("q+state: expected 1, got %d", got)
 	}
 }
+
+func TestBulkReview_RequiresModerator(t *testing.T) {
+	s := newTestServer(t)
+	h := s.Router()
+	id := createDeployment(t, h, "Springfield PD")
+
+	// Anonymous.
+	rec := doJSON(t, h, http.MethodPost, "/deployments/bulk-review",
+		map[string]any{"ids": []string{id}, "status": "confirmed"}, "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("anonymous: expected 401, got %d", rec.Code)
+	}
+
+	// Signed in, but not a moderator. This endpoint can rewrite hundreds of
+	// public records in one call, so the role gate matters more here.
+	subToken := loginAs(t, s, h, "sub@example.com", "submitter")
+	rec = doJSON(t, h, http.MethodPost, "/deployments/bulk-review",
+		map[string]any{"ids": []string{id}, "status": "confirmed"}, subToken)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("submitter: expected 403, got %d", rec.Code)
+	}
+
+	// The record must be untouched by the rejected attempts.
+	rec = doJSON(t, h, http.MethodGet, "/deployments/"+id, nil, "")
+	var d models.Deployment
+	json.Unmarshal(rec.Body.Bytes(), &d)
+	if d.Status != models.StatusUnderReview {
+		t.Errorf("record changed despite refused auth: %q", d.Status)
+	}
+}
+
+func TestBulkReview_Success(t *testing.T) {
+	s := newTestServer(t)
+	h := s.Router()
+	ids := []string{
+		createDeployment(t, h, "Agency A"),
+		createDeployment(t, h, "Agency B"),
+		createDeployment(t, h, "Agency C"),
+	}
+	modToken := loginAs(t, s, h, "mod@example.com", "moderator")
+
+	rec := doJSON(t, h, http.MethodPost, "/deployments/bulk-review",
+		map[string]any{"ids": ids[:2], "status": "confirmed"}, modToken)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		Updated int `json:"updated"`
+	}
+	json.Unmarshal(rec.Body.Bytes(), &out)
+	if out.Updated != 2 {
+		t.Errorf("expected 2 updated, got %d", out.Updated)
+	}
+
+	// The two named ids changed and recorded a reviewer...
+	for _, id := range ids[:2] {
+		rec = doJSON(t, h, http.MethodGet, "/deployments/"+id, nil, "")
+		var d models.Deployment
+		json.Unmarshal(rec.Body.Bytes(), &d)
+		if d.Status != models.StatusConfirmed {
+			t.Errorf("%s: expected confirmed, got %q", id, d.Status)
+		}
+		// Attribution matters more in bulk, not less: one click moved
+		// several records and it must stay clear who did it.
+		if d.ReviewedBy == nil {
+			t.Errorf("%s: reviewed_by not recorded", id)
+		}
+	}
+
+	// ...and the one left out did not.
+	rec = doJSON(t, h, http.MethodGet, "/deployments/"+ids[2], nil, "")
+	var untouched models.Deployment
+	json.Unmarshal(rec.Body.Bytes(), &untouched)
+	if untouched.Status != models.StatusUnderReview {
+		t.Errorf("unlisted record was modified: %q", untouched.Status)
+	}
+}
+
+func TestBulkReview_Validation(t *testing.T) {
+	s := newTestServer(t)
+	h := s.Router()
+	modToken := loginAs(t, s, h, "mod@example.com", "moderator")
+
+	tooMany := make([]string, 201)
+	for i := range tooMany {
+		tooMany[i] = "00000000-0000-0000-0000-000000000000"
+	}
+
+	for name, body := range map[string]map[string]any{
+		"empty ids":      {"ids": []string{}, "status": "confirmed"},
+		"invalid status": {"ids": []string{"x"}, "status": "bogus"},
+		"over the cap":   {"ids": tooMany, "status": "confirmed"},
+	} {
+		rec := doJSON(t, h, http.MethodPost, "/deployments/bulk-review", body, modToken)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d: %s", name, rec.Code, rec.Body.String())
+		}
+	}
+}

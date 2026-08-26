@@ -5,6 +5,7 @@ import GoogleSignIn from "../components/GoogleSignIn";
 import StatusBadge from "../components/StatusBadge";
 import { useAuth } from "../lib/auth";
 import {
+  bulkReviewDeployments,
   listDeployments,
   reviewDeployment,
   type Deployment,
@@ -21,6 +22,17 @@ const EVIDENCE_LABELS: Record<string, string> = {
   osm_import: "OpenStreetMap",
 };
 
+// Shown on each card so a reviewer can see at a glance whether a record is
+// about a police force or a supermarket — the two warrant very different
+// scrutiny, and the distinction is easy to miss in a long queue.
+const OPERATOR_TYPE_LABELS: Record<string, string> = {
+  law_enforcement: "Law enforcement",
+  government: "Government",
+  education: "Education",
+  private: "Private",
+  unknown: "Unclassified",
+};
+
 const DECISIONS: Array<{ status: DeploymentStatus; label: string }> = [
   { status: "confirmed", label: "Confirm" },
   { status: "contract_found", label: "Contract found" },
@@ -33,10 +45,21 @@ export default function ReviewDeskPage() {
   const [queue, setQueue] = useState<Deployment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(() => {
-    listDeployments({ status: "under_review" })
-      .then(setQueue)
+    listDeployments({ status: "under_review", limit: 200 })
+      .then((rows) => {
+        setQueue(rows);
+        // Drop selections for records that are no longer in the queue,
+        // otherwise a later bulk action could target something already
+        // decided.
+        setSelected((prev) => {
+          const live = new Set(rows.map((r) => r.id));
+          return new Set([...prev].filter((id) => live.has(id)));
+        });
+      })
       .catch((err: unknown) =>
         setError(err instanceof Error ? err.message : "Could not load the review queue"),
       );
@@ -58,6 +81,37 @@ export default function ReviewDeskPage() {
       setError(err instanceof Error ? err.message : "Could not save that decision");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function bulkDecide(status: DeploymentStatus) {
+    if (selected.size === 0) return;
+    setBulkBusy(true);
+    setError(null);
+    try {
+      const res = await bulkReviewDeployments([...selected], status);
+      // Report what the server actually changed rather than what was asked
+      // for — ids that no longer exist are skipped silently server-side.
+      if (res.updated !== selected.size) {
+        setError(
+          `${res.updated} of ${selected.size} records were updated. The rest may have been reviewed already.`,
+        );
+      }
+      setSelected(new Set());
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not apply that bulk decision");
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -132,12 +186,59 @@ export default function ReviewDeskPage() {
         </p>
       )}
 
+      {queue && queue.length > 0 && (
+        <div className="review-bulk">
+          <label>
+            <input
+              type="checkbox"
+              checked={selected.size > 0 && selected.size === queue.length}
+              // Indeterminate when only some are selected, so "select all"
+              // never looks like it covers more than it does.
+              ref={(el) => {
+                if (el) el.indeterminate = selected.size > 0 && selected.size < queue.length;
+              }}
+              onChange={(e) =>
+                setSelected(e.target.checked ? new Set(queue.map((d) => d.id)) : new Set())
+              }
+            />
+            <span>
+              {selected.size > 0 ? `${selected.size} selected` : `Select all ${queue.length}`}
+            </span>
+          </label>
+
+          <div className="review-bulk-actions">
+            {DECISIONS.map((dec) => (
+              <button
+                key={dec.status}
+                disabled={selected.size === 0 || bulkBusy}
+                onClick={() => void bulkDecide(dec.status)}
+              >
+                {bulkBusy ? "Working…" : `${dec.label} selected`}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {queue?.map((d) => (
         <article key={d.id} className="review-card">
           <header>
+            <label className="review-select">
+              <input
+                type="checkbox"
+                checked={selected.has(d.id)}
+                onChange={() => toggle(d.id)}
+                aria-label={`Select ${d.agency_name}`}
+              />
+            </label>
             <h2>
               {d.city}, {d.state}
             </h2>
+            {d.operator_type && (
+              <span className={`operator-type operator-type-${d.operator_type}`}>
+                {OPERATOR_TYPE_LABELS[d.operator_type] ?? d.operator_type}
+              </span>
+            )}
             <StatusBadge status={d.status} />
           </header>
 

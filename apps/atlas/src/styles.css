@@ -733,3 +733,80 @@ button.primary:disabled {
   font-size: 0.8rem;
   color: var(--text-muted);
 }
+
+/* Review desk bulk actions */
+.review-bulk {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  position: sticky;
+  /* Sticky so the actions stay reachable while scrolling a long candidate
+     queue, which is the case this exists for. */
+  top: 0.5rem;
+  z-index: 5;
+}
+
+.review-bulk label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+  font-weight: 550;
+}
+
+.review-bulk-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.review-bulk-actions button {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.review-bulk-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.review-select {
+  display: flex;
+  align-items: center;
+}
+
+/* Operator classification chip. Deliberately quiet: it's context for the
+   reviewer, not a verdict. */
+.operator-type {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.12rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.operator-type-law_enforcement {
+  color: var(--status-disputed);
+  border-color: currentColor;
+}
+
+.operator-type-private {
+  color: var(--status-contract);
+  border-color: currentColor;
+}

@@ -62,6 +62,10 @@ func (s *Server) Router() http.Handler {
 		r.With(s.submissionLimiter.middleware).Post("/", s.handleCreateDeployment)
 		r.Get("/{id}", s.handleGetDeployment)
 		r.With(s.requireRole("moderator", "admin")).Post("/{id}/review", s.handleReviewDeployment)
+		// Bulk path exists for the OSM-derived candidate queue, which runs
+		// to hundreds of records; reviewing those one at a time isn't
+		// realistic. Same role gate as the single-record path.
+		r.With(s.requireRole("moderator", "admin")).Post("/bulk-review", s.handleBulkReviewDeployments)
 	})
 
 	r.Route("/cameras", func(r chi.Router) {

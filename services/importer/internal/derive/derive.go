@@ -18,6 +18,8 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"flockwatch/importer/internal/importer"
 )
 
 type Candidate struct {
@@ -83,6 +85,11 @@ func FindCandidates(ctx context.Context, pool *pgxpool.Pool) ([]Candidate, error
 // already confirmed, disputed, or removed. A rejected candidate stays
 // rejected across weekly runs rather than reappearing in the queue forever.
 func Create(ctx context.Context, pool *pgxpool.Pool, c Candidate, city string) (created bool, err error) {
+	// Classified so the record states what kind of body this is. Keyword
+	// matching is fallible, which is exactly why the result is a candidate
+	// for review rather than a published record.
+	operatorType := importer.ClassifyOperator(c.Operator)
+
 	var exists bool
 	if err := pool.QueryRow(ctx, `
 		SELECT EXISTS(
@@ -103,10 +110,11 @@ func Create(ctx context.Context, pool *pgxpool.Pool, c Candidate, city string) (
 	_, err = pool.Exec(ctx, `
 		INSERT INTO deployments (
 			agency_name, city, state, location,
-			documented_units, evidence_type, source_links, status, notes
+			documented_units, evidence_type, source_links, status, notes,
+			operator_type
 		) VALUES (
 			$1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326)::geography,
-			$6, 'osm_import', $7, 'under_review', $8
+			$6, 'osm_import', $7, 'under_review', $8, $9
 		)
 	`, c.Operator, city, c.State, c.Lng, c.Lat, c.Cameras,
 		[]string{"https://www.openstreetmap.org/copyright"},
@@ -114,6 +122,7 @@ func Create(ctx context.Context, pool *pgxpool.Pool, c Candidate, city string) (
 			"Candidate derived from OpenStreetMap: %d camera node(s) in %s carry operator=%q. "+
 				"Not verified against public records — confirm against a council report, contract, "+
 				"or FOIA response before publishing.", c.Cameras, c.State, c.Operator),
+		string(operatorType),
 	)
 	if err != nil {
 		return false, fmt.Errorf("insert candidate: %w", err)

@@ -173,5 +173,8 @@ func NormalizeOperator(raw string) *string {
 		return nil
 	}
 
-	return &trimmed
+	// Canonicalized so cosmetic spelling differences (curly apostrophes,
+	// underscores) don't split one agency into several groups.
+	canonical := CanonicalizeOperator(trimmed)
+	return &canonical
 }
