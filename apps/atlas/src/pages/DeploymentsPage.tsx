@@ -27,12 +27,26 @@ export default function DeploymentsPage() {
   const [rows, setRows] = useState<Deployment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Search is sent to the API rather than applied to the fetched page.
+  // Filtering client-side only ever searched the rows already loaded (one
+  // page, 50 by default), so any match past that was invisible and the
+  // search looked broken. Debounced so typing doesn't fire a request per
+  // keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
   useEffect(() => {
     let cancelled = false;
     setRows(null);
     setError(null);
 
-    listDeployments(status === "all" ? {} : { status })
+    listDeployments({
+      ...(status === "all" ? {} : { status }),
+      ...(debouncedSearch ? { q: debouncedSearch } : {}),
+    })
       .then((data) => {
         if (!cancelled) setRows(data);
       })
@@ -45,20 +59,9 @@ export default function DeploymentsPage() {
     return () => {
       cancelled = true;
     };
-  }, [status]);
+  }, [status, debouncedSearch]);
 
-  // Client-side text filter over the already-fetched page. The API has no
-  // free-text search endpoint yet; when the dataset outgrows a single page
-  // this needs to move server-side.
-  const visible = rows?.filter((d) => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      d.agency_name.toLowerCase().includes(q) ||
-      d.city.toLowerCase().includes(q) ||
-      d.state.toLowerCase().includes(q)
-    );
-  });
+  const visible = rows;
 
   return (
     <div className="page">
@@ -93,10 +96,32 @@ export default function DeploymentsPage() {
       {!error && rows === null && <p className="state">Loading records…</p>}
 
       {visible && visible.length === 0 && (
-        <p className="state">
-          No records match this filter yet.{" "}
-          <Link to="/submit">Submit a sighting</Link> if you have documentation.
-        </p>
+        <div className="state">
+          {debouncedSearch || status !== "all" ? (
+            <p>
+              No records match that search.{" "}
+              <Link to="/submit">Submit a sighting</Link> if you have documentation.
+            </p>
+          ) : (
+            <>
+              <p style={{ marginTop: 0 }}>
+                <strong>No deployment records have been published yet.</strong>
+              </p>
+              <p>
+                Deployment records are agency-level and must be backed by public records — a
+                council report, contract, or FOIA response — so they're added and reviewed by
+                hand rather than imported.
+              </p>
+              <p>
+                The <Link to="/">map</Link> already shows tens of thousands of individual
+                camera locations from OpenStreetMap. Those are a separate layer: a camera pin
+                is not a claim about which agency operates it. See{" "}
+                <Link to="/methodology">Methodology</Link> for why the two are kept apart, or{" "}
+                <Link to="/submit">submit a record</Link> if you have documentation.
+              </p>
+            </>
+          )}
+        </div>
       )}
 
       {visible && visible.length > 0 && (

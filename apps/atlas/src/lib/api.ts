@@ -125,6 +125,8 @@ export interface DeploymentFilters {
   state?: string;
   status?: DeploymentStatus;
   city?: string;
+  /** Free-text search across agency, city, and state. Applied server-side. */
+  q?: string;
   limit?: number;
   offset?: number;
 }
@@ -195,4 +197,49 @@ export function listCameras(
   }
   const qs = params.toString();
   return request<CameraSighting[]>(`/cameras${qs ? `?${qs}` : ""}`);
+}
+
+export interface Place {
+  label: string;
+  lat: number;
+  lng: number;
+  /** [south, north, west, east] when the result covers an area. */
+  boundingBox?: [number, number, number, number];
+}
+
+/**
+ * Looks up a place name for the map's search box.
+ *
+ * Proxied through this origin (/geocode) rather than called directly, for
+ * the same reasons as the map tiles: tracker blockers drop third-party
+ * requests, and the geocoder never learns who searched for which address.
+ * That second point matters more than usual here — a search on this site
+ * can reveal where someone lives or is going.
+ */
+export async function searchPlaces(query: string, signal?: AbortSignal): Promise<Place[]> {
+  const params = new URLSearchParams({
+    q: query,
+    format: "json",
+    limit: "5",
+    countrycodes: "us",
+    addressdetails: "0",
+  });
+  const res = await fetch(`/geocode/search?${params}`, { signal });
+  if (!res.ok) throw new ApiError("Place search is unavailable", res.status);
+
+  const raw = (await res.json()) as Array<{
+    display_name: string;
+    lat: string;
+    lon: string;
+    boundingbox?: [string, string, string, string];
+  }>;
+
+  return raw.map((r) => ({
+    label: r.display_name,
+    lat: Number(r.lat),
+    lng: Number(r.lon),
+    boundingBox: r.boundingbox
+      ? [Number(r.boundingbox[0]), Number(r.boundingbox[1]), Number(r.boundingbox[2]), Number(r.boundingbox[3])]
+      : undefined,
+  }));
 }

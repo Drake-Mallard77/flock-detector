@@ -1,6 +1,9 @@
 import { Suspense, lazy } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 
+import ThemeToggle from "./components/ThemeToggle";
+import { useTheme } from "./lib/theme";
+
 import DeploymentDetailPage from "./pages/DeploymentDetailPage";
 import DeploymentsPage from "./pages/DeploymentsPage";
 import MethodologyPage from "./pages/MethodologyPage";
@@ -14,6 +17,8 @@ import SubmitPage from "./pages/SubmitPage";
 const MapPage = lazy(() => import("./pages/MapPage"));
 
 export default function App() {
+  const { preference, setPreference } = useTheme();
+
   return (
     <div className="layout">
       <header className="site-header">
@@ -34,6 +39,7 @@ export default function App() {
           <NavLink to="/submit" className="cta">
             + Submit a sighting
           </NavLink>
+          <ThemeToggle preference={preference} onChange={setPreference} />
         </nav>
       </header>
 

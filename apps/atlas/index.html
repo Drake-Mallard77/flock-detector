@@ -8,6 +8,22 @@
       name="description"
       content="A public-records atlas of Flock Safety / ALPR surveillance deployments across the US."
     />
+    <script>
+      // Applies the saved theme before first paint. Without this the page
+      // renders light, then flips to dark once React mounts — a visible
+      // flash on every load. Kept inline and tiny for that reason; it must
+      // run before the stylesheet paints, not after a module loads.
+      (function () {
+        try {
+          var p = localStorage.getItem("flockwatch-theme");
+          if (p === "light" || p === "dark") {
+            document.documentElement.setAttribute("data-theme", p);
+          }
+        } catch (e) {
+          // Storage blocked; the CSS media query still follows the OS.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

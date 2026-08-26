@@ -1,5 +1,10 @@
 /* Muted, document-like palette — this is a public-records project, and the
-   visual language should read closer to an archive than a consumer app. */
+   visual language should read closer to an archive than a consumer app.
+
+   Themed via tokens only: every colour has a dark counterpart, so no
+   component branches on theme itself. Dark mode follows the OS by default
+   and can be overridden by a [data-theme] attribute on <html>, which the
+   toggle sets and persists. */
 :root {
   --bg: #ffffff;
   --bg-subtle: #f7f7f6;
@@ -7,6 +12,18 @@
   --text: #1a1a18;
   --text-muted: #6b6b66;
   --accent: #2c3e50;
+  /* Text/icons drawn on top of --accent. */
+  --on-accent: #ffffff;
+
+  /* Floating panels over the map. Semi-transparent so the map reads
+     through, which is why they must be themed rather than plain white. */
+  --overlay-bg: rgba(255, 255, 255, 0.94);
+  --cluster-halo: rgba(44, 62, 80, 0.25);
+
+  --notice-error-border: #e0b4a4;
+  --notice-error-bg: #fdf3ef;
+  --notice-success-border: #b3d4c3;
+  --notice-success-bg: #f0f8f4;
 
   /* Status colors, also used for map pins — chosen to stay distinguishable
      in grayscale and for common forms of color blindness. */
@@ -18,6 +35,66 @@
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--text);
   background: var(--bg);
+  color-scheme: light;
+}
+
+/* Dark palette. Backgrounds are warm-neutral rather than pure black — an
+   archive should read as paper, not as a terminal. Status colours are
+   lightened because the light-mode versions fail contrast on dark. */
+:root[data-theme="dark"] {
+  --bg: #16171a;
+  --bg-subtle: #1e2024;
+  --border: #33363c;
+  --text: #e8e8e4;
+  --text-muted: #9a9a94;
+  --accent: #8fb3d9;
+  /* Dark text on the now-light accent, so buttons stay legible. */
+  --on-accent: #10161d;
+
+  --overlay-bg: rgba(22, 23, 26, 0.94);
+  --cluster-halo: rgba(143, 179, 217, 0.25);
+
+  --notice-error-border: #7a4436;
+  --notice-error-bg: #2a1c18;
+  --notice-success-border: #2f5c46;
+  --notice-success-bg: #16241d;
+
+  --status-confirmed: #5cbb8f;
+  --status-contract: #d1ac52;
+  --status-review: #9a9ab8;
+  --status-disputed: #d98a67;
+
+  color-scheme: dark;
+}
+
+/* Follow the OS when the user hasn't chosen explicitly. Duplicated rather
+   than shared, so an explicit [data-theme] choice still wins in both
+   directions (dark UI on a light OS and the reverse). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16171a;
+    --bg-subtle: #1e2024;
+    --border: #33363c;
+    --text: #e8e8e4;
+    --text-muted: #9a9a94;
+    --accent: #8fb3d9;
+    --on-accent: #10161d;
+
+    --overlay-bg: rgba(22, 23, 26, 0.94);
+    --cluster-halo: rgba(143, 179, 217, 0.25);
+
+    --notice-error-border: #7a4436;
+    --notice-error-bg: #2a1c18;
+    --notice-success-border: #2f5c46;
+    --notice-success-bg: #16241d;
+
+    --status-confirmed: #5cbb8f;
+    --status-contract: #d1ac52;
+    --status-review: #9a9ab8;
+    --status-disputed: #d98a67;
+
+    color-scheme: dark;
+  }
 }
 
 * {
@@ -27,6 +104,10 @@
 body {
   margin: 0;
   min-height: 100vh;
+  /* Explicit, not inherited: without it the UA default white shows
+     through around the layout in dark mode. */
+  background: var(--bg);
+  color: var(--text);
 }
 
 a {
@@ -157,7 +238,7 @@ main {
 .filters button[aria-pressed="true"] {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .filters input,
@@ -261,7 +342,7 @@ main {
   left: 0.75rem;
   /* See .map-filters — must clear Leaflet's panes (400) and controls (800). */
   z-index: 900;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--overlay-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
@@ -303,7 +384,7 @@ main {
   /* Above Leaflet: its map panes are z-index 400 and its own controls
      800, so anything lower renders underneath the tiles. */
   z-index: 900;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--overlay-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.6rem 0.7rem;
@@ -385,7 +466,7 @@ button.primary {
   border: none;
   border-radius: 5px;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   cursor: pointer;
 }
 
@@ -405,13 +486,13 @@ button.primary:disabled {
 }
 
 .notice.error {
-  border-color: #e0b4a4;
-  background: #fdf3ef;
+  border-color: var(--notice-error-border);
+  background: var(--notice-error-bg);
 }
 
 .notice.success {
-  border-color: #b3d4c3;
-  background: #f0f8f4;
+  border-color: var(--notice-success-border);
+  background: var(--notice-success-bg);
 }
 
 .state {
@@ -541,13 +622,13 @@ button.primary:disabled {
 /* Cluster bubbles, restyled from leaflet.markercluster's stock
    green/yellow to the site's palette. */
 .marker-cluster {
-  background: rgba(44, 62, 80, 0.25);
+  background: var(--cluster-halo);
   border-radius: 50%;
 }
 
 .marker-cluster div {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   width: 30px;
   height: 30px;
   margin-left: 5px;
@@ -565,4 +646,90 @@ button.primary:disabled {
 .leaflet-popup-content h3 {
   margin: 0 0 0.3rem;
   font-size: 0.9rem;
+}
+
+/* Theme toggle */
+.theme-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.theme-toggle button {
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0.25rem 0.55rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.theme-toggle button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* Map place search */
+.place-search {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-width: 13rem;
+}
+
+.place-search input {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+  width: 100%;
+}
+
+.place-results {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0.2rem;
+  list-style: none;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.14);
+  /* Above the map panes and its controls, like the rest of the overlay UI. */
+  z-index: 1000;
+  max-height: 15rem;
+  overflow-y: auto;
+  min-width: 20rem;
+}
+
+.place-results button {
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  width: 100%;
+  padding: 0.35rem 0.45rem;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 4px;
+  line-height: 1.35;
+}
+
+.place-results button:hover {
+  background: var(--bg-subtle);
+}
+
+.place-status {
+  padding: 0.35rem 0.45rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }

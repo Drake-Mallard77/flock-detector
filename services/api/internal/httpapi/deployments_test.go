@@ -236,3 +236,67 @@ func TestReviewDeployment_Success(t *testing.T) {
 		t.Error("expected last_reviewed_at to be set")
 	}
 }
+
+// Search runs in SQL, not over the already-fetched page: a client-side
+// filter can only see one page of results, so matches further in are
+// invisible and the search looks broken.
+func TestListDeployments_Search(t *testing.T) {
+	s := newTestServer(t)
+	h := s.Router()
+
+	for _, d := range []struct{ agency, city, state string }{
+		{"Springfield Police Department", "Springfield", "IL"},
+		{"Chicago Police Department", "Chicago", "IL"},
+		{"Phoenix Police Department", "Phoenix", "AZ"},
+	} {
+		rec := doJSON(t, h, http.MethodPost, "/deployments", map[string]any{
+			"agency_name": d.agency, "city": d.city, "state": d.state,
+			"evidence_type": "council_report",
+		}, "")
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("seed %s: %d %s", d.agency, rec.Code, rec.Body.String())
+		}
+	}
+
+	count := func(query string) int {
+		t.Helper()
+		rec := doJSON(t, h, http.MethodGet, "/deployments"+query, nil, "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: expected 200, got %d", query, rec.Code)
+		}
+		var got []models.Deployment
+		json.Unmarshal(rec.Body.Bytes(), &got)
+		return len(got)
+	}
+
+	if got := count("?q=Chicago"); got != 1 {
+		t.Errorf("q=Chicago: expected 1, got %d", got)
+	}
+	// Case-insensitive — readers won't match our capitalisation.
+	if got := count("?q=chicago"); got != 1 {
+		t.Errorf("q=chicago (lowercase): expected 1, got %d", got)
+	}
+	// Partial words must match; requiring whole words makes search feel broken.
+	if got := count("?q=Spring"); got != 1 {
+		t.Errorf("q=Spring: expected 1, got %d", got)
+	}
+	// Matches on state too.
+	if got := count("?q=IL"); got != 2 {
+		t.Errorf("q=IL: expected 2, got %d", got)
+	}
+	// Matches on agency name across cities.
+	if got := count("?q=Police+Department"); got != 3 {
+		t.Errorf("q=Police Department: expected 3, got %d", got)
+	}
+	if got := count("?q=Nowhere"); got != 0 {
+		t.Errorf("q=Nowhere: expected 0, got %d", got)
+	}
+	// Empty search is not a filter.
+	if got := count("?q="); got != 3 {
+		t.Errorf("empty q: expected 3, got %d", got)
+	}
+	// Composes with existing filters.
+	if got := count("?q=Police&state=AZ"); got != 1 {
+		t.Errorf("q+state: expected 1, got %d", got)
+	}
+}

@@ -42,6 +42,21 @@
 	#  2. A surveillance-transparency site shouldn't leak its visitors'
 	#     browsing to a third-party CDN in the first place — first-party
 	#     tiles mean the tile host never sees who is looking at what.
+	#
+	# The same reasoning covers the geocoder below, where it matters more: a
+	# place search on this site can reveal where someone lives or is headed.
+
+	# Nominatim (OpenStreetMap's geocoder) for the map's place search.
+	#
+	# Nominatim's usage policy REQUIRES an identifying User-Agent and
+	# rate-limits to ~1 req/sec. The client debounces; do not remove either.
+	handle_path /geocode/* {
+		reverse_proxy https://nominatim.openstreetmap.org {
+			header_up Host nominatim.openstreetmap.org
+			header_up User-Agent "flockwatch (+https://github.com/drake-mallard77/flock-detector)"
+		}
+	}
+
 	# Esri's Light Gray Canvas, reached keyless. Alternatives ruled out:
 	# tile.openstreetmap.org blocks application traffic under OSM's tile
 	# usage policy; CARTO watermarks "API KEY REQUIRED" over keyless tiles;

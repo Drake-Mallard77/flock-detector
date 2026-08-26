@@ -2,12 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet.markercluster";
 
+import PlaceSearch from "../components/PlaceSearch";
+import { useTheme } from "../lib/theme";
+
 import {
   listCameras,
   listManufacturers,
   type CameraFilters,
   type CameraSighting,
   type ManufacturerCount,
+  type Place,
 } from "../lib/api";
 
 // Same-origin in production (Caddy proxies it); the Vite dev server proxies
@@ -29,7 +33,8 @@ const API_LIMIT = 1000;
  * tiles as ordinary DOM images and works without WebGL, at roughly 1/20th
  * the bundle size.
  *
- * Tiles are Esri's Light Gray Canvas, proxied through this origin. Others
+ * Tiles are Esri's Gray Canvas (Light or Dark to match the theme),
+ * proxied through this origin. Others
  * ruled out along the way: tile.openstreetmap.org blocks application
  * traffic under OSM's tile usage policy; CARTO watermarks keyless tiles
  * "API KEY REQUIRED"; OpenFreeMap is vector-only at street zoom, which
@@ -40,14 +45,28 @@ const API_LIMIT = 1000;
  * Esri serves these {z}/{y}/{x} — row before column, the reverse of the
  * usual slippy-map order.
  */
-const BASE_TILES = `${TILE_BASE}/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}`;
+const tileSet = (variant: "Light" | "Dark") => ({
+  base: `${TILE_BASE}/ArcGIS/rest/services/Canvas/World_${variant}_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
+  labels: `${TILE_BASE}/ArcGIS/rest/services/Canvas/World_${variant}_Gray_Reference/MapServer/tile/{z}/{y}/{x}`,
+});
 
-// Place names ship as a separate overlay in this basemap, so the labels
-// stay crisp above the camera markers instead of being buried by them.
-const LABEL_TILES = `${TILE_BASE}/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}`;
 
 const ATTRIBUTION =
   'Tiles &copy; Esri | Camera data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+/**
+ * Reads a CSS custom property off <html>.
+ *
+ * Leaflet paints markers onto a canvas/SVG with literal colour values, so
+ * they can't inherit from the stylesheet the way DOM elements do. Pulling
+ * the token at draw time keeps one source of truth for the palette instead
+ * of duplicating hex codes here.
+ */
+function themeColor(name: string, fallback: string): string {
+  if (typeof window === "undefined") return fallback;
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
 
 /** Escapes untrusted text before it goes into a Leaflet popup's HTML. */
 function escapeHtml(value: string): string {
@@ -64,6 +83,9 @@ export default function MapPage() {
   const map = useRef<L.Map | null>(null);
   const clusterLayer = useRef<L.MarkerClusterGroup | null>(null);
   const refetchTimer = useRef<number | undefined>(undefined);
+  const baseLayer = useRef<L.TileLayer | null>(null);
+  const labelLayer = useRef<L.TileLayer | null>(null);
+  const { active: theme } = useTheme();
 
   const [count, setCount] = useState<number | null>(null);
   const [truncated, setTruncated] = useState(false);
@@ -83,11 +105,16 @@ export default function MapPage() {
       center: [39.8, -98.5], // continental US
       zoom: 4,
       worldCopyJump: true,
+      // Zoom buttons moved off the top-left, where they sat on top of the
+      // filter bar and clipped the search input.
+      zoomControl: false,
     });
+    L.control.zoom({ position: "topright" }).addTo(m);
     map.current = m;
 
-    L.tileLayer(BASE_TILES, { attribution: ATTRIBUTION, maxZoom: 18 }).addTo(m);
-    L.tileLayer(LABEL_TILES, { maxZoom: 18, pane: "shadowPane" }).addTo(m);
+    const tiles = tileSet(theme === "dark" ? "Dark" : "Light");
+    baseLayer.current = L.tileLayer(tiles.base, { attribution: ATTRIBUTION, maxZoom: 18 }).addTo(m);
+    labelLayer.current = L.tileLayer(tiles.labels, { maxZoom: 18, pane: "shadowPane" }).addTo(m);
 
     // Clustering isn't cosmetic: a full US import is 100k+ points, and
     // drawing individual markers at low zoom would stall the browser.
@@ -123,6 +150,20 @@ export default function MapPage() {
     };
   }, []);
 
+  // Swap the basemap when the theme changes. Only the tile URLs change —
+  // rebuilding the map would lose the viewport and reset the user's
+  // position, which is worse than a brief tile reload.
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !baseLayer.current || !labelLayer.current) return;
+    const tiles = tileSet(theme === "dark" ? "Dark" : "Light");
+    baseLayer.current.setUrl(tiles.base);
+    labelLayer.current.setUrl(tiles.labels);
+    // Markers carry literal colours, so they need redrawing too.
+    void loadCameras(m);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [theme]);
+
   // Vendor list comes from the data, not a hardcoded array — OSM
   // contributors add manufacturers over time, and a static list goes
   // silently out of date. A failure here only costs the dropdown.
@@ -157,12 +198,14 @@ export default function MapPage() {
       if (!cluster) return;
 
       cluster.clearLayers();
+      const stroke = themeColor("--bg", "#ffffff");
+      const fill = themeColor("--status-confirmed", "#1b6b4a");
       const markers = cameras.map((c) => {
         const marker = L.circleMarker([c.lat, c.lng], {
           radius: 5,
-          color: "#ffffff",
+          color: stroke,
           weight: 1.5,
-          fillColor: "#1b6b4a",
+          fillColor: fill,
           fillOpacity: 1,
         });
         const heading =
@@ -188,6 +231,23 @@ export default function MapPage() {
     }
   }
 
+  function goToPlace(place: Place) {
+    const m = map.current;
+    if (!m) return;
+    // Prefer the result's own bounding box so a city fills the viewport
+    // rather than landing at an arbitrary zoom on its centre point.
+    if (place.boundingBox) {
+      const [south, north, west, east] = place.boundingBox;
+      m.fitBounds([
+        [south, west],
+        [north, east],
+      ]);
+    } else {
+      m.setView([place.lat, place.lng], 14);
+    }
+    // The moveend handler refetches cameras for the new viewport.
+  }
+
   function setFilter(key: keyof CameraFilters, value: string) {
     setFilters((prev) => {
       const next = { ...prev };
@@ -202,6 +262,8 @@ export default function MapPage() {
       <div className="map-root" ref={container} />
 
       <div className="map-filters">
+        <PlaceSearch onSelect={goToPlace} />
+
         <label>
           <span>Source</span>
           <select

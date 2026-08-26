@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -30,6 +31,18 @@ func (s *Server) handleListDeployments(w http.ResponseWriter, r *http.Request) {
 		offset = v
 	}
 
+	// Free-text search across the fields a reader would actually type:
+	// agency, city, or state. Done in SQL rather than filtering the fetched
+	// page in the browser — a client-side filter only ever searches the
+	// rows already loaded (at most one page), so anything past the first
+	// page is invisible to it and the search silently appears broken.
+	//
+	// ILIKE with a wrapped wildcard is deliberate at this size: the table
+	// holds agency-level records, not the 130k+ camera rows, so a trigram
+	// or full-text index isn't earning its complexity yet. Revisit if this
+	// grows past a few thousand rows.
+	search := strings.TrimSpace(q.Get("q"))
+
 	sql := `
 		SELECT id, agency_name, city, state, county,
 		       ST_Y(location::geometry), ST_X(location::geometry),
@@ -39,10 +52,17 @@ func (s *Server) handleListDeployments(w http.ResponseWriter, r *http.Request) {
 		WHERE ($1 = '' OR state = $1)
 		  AND ($2 = '' OR status = $2)
 		  AND ($3 = '' OR city = $3)
+		  AND (
+		    $6 = '' OR
+		    agency_name ILIKE '%' || $6 || '%' OR
+		    city        ILIKE '%' || $6 || '%' OR
+		    state       ILIKE '%' || $6 || '%'
+		  )
 		ORDER BY updated_at DESC
 		LIMIT $4 OFFSET $5
 	`
-	rows, err := s.db.Query(r.Context(), sql, q.Get("state"), q.Get("status"), q.Get("city"), limit, offset)
+	rows, err := s.db.Query(r.Context(), sql,
+		q.Get("state"), q.Get("status"), q.Get("city"), limit, offset, search)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "query failed")
 		return
