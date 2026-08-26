@@ -25,6 +25,8 @@ module "compute" {
   availability_domain = local.availability_domain
   subnet_id           = module.network.subnet_id
   image_ocid          = var.image_ocid
+  ocpus               = var.ocpus
+  memory_gbs          = var.memory_gbs
   ssh_public_key      = var.ssh_public_key
   app_image           = var.app_image
   db_password         = var.db_password

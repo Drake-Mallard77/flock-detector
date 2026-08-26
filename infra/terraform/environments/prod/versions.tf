@@ -8,21 +8,18 @@ terraform {
     }
   }
 
-  # Native OCI backend (Terraform >= 1.12) — Oracle's docs now recommend
-  # this over the older S3-compatible-endpoint workaround for storing state
-  # in Object Storage. UNVERIFIED against a real OCI account in this repo
-  # (no credentials available while building this) — run `terraform init`
-  # and confirm the exact required keys before trusting this in production;
-  # see infra/terraform/README.md for the S3-compatible fallback if this
-  # backend type doesn't behave as expected on your Terraform version.
-  backend "oci" {
-    # Supply via `terraform init -backend-config=backend.hcl` (gitignored)
-    # or -backend-config=key=value flags, not hardcoded here:
-    #   bucket    = "<your-state-bucket>"
-    #   namespace = "<your-object-storage-namespace>"
-    #   key       = "flockwatch/prod/terraform.tfstate"
-    #   region    = "<your-region>"
-  }
+  # Remote state (native `oci` backend, Terraform >= 1.12) intentionally
+  # deferred: it's unverified against a real account, and the first real
+  # deploy isn't the moment to debug an unverified backend. Using local
+  # state (the default when no `backend` block is present) for now — the
+  # actual state file is infra/terraform/environments/prod/terraform.tfstate
+  # (gitignored; back it up yourself until remote state is set up).
+  # To switch on remote state later:
+  #   1. Uncomment this block and fill in bucket/namespace/key/region
+  #      (via -backend-config, not hardcoded here — see README).
+  #   2. Run `terraform init -migrate-state`.
+  # backend "oci" {
+  # }
 }
 
 provider "oci" {

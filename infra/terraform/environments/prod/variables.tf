@@ -53,3 +53,14 @@ variable "domain" {
   type    = string
   default = ""
 }
+
+variable "ocpus" {
+  type        = number
+  default     = 2
+  description = "A1.Flex Always Free capacity is scarce in some regions/ADs — dropping this (and memory_gbs proportionally) to 1/6 sometimes finds capacity when 2/12 doesn't. See infra/terraform/README.md."
+}
+
+variable "memory_gbs" {
+  type    = number
+  default = 12
+}
