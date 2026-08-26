@@ -136,6 +136,16 @@ export function createDeployment(body: NewDeployment) {
   });
 }
 
+export interface ManufacturerCount {
+  manufacturer: string;
+  count: number;
+}
+
+/** Manufacturers actually present in the data, most common first. */
+export function listManufacturers() {
+  return request<ManufacturerCount[]>("/cameras/manufacturers");
+}
+
 /** bbox is [west, south, east, north]. */
 export function listCameras(
   bbox?: [number, number, number, number],

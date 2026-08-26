@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -136,6 +137,50 @@ func TestListCameras_Filters(t *testing.T) {
 	// Filters compose.
 	if got := count("?source=osm_import&manufacturer=unknown"); got != 1 {
 		t.Errorf("source+manufacturer: expected 1, got %d", got)
+	}
+}
+
+func TestListManufacturers(t *testing.T) {
+	s := newTestServer(t)
+	h := s.Router()
+
+	// Two Flock, one Genetec, one with no manufacturer recorded.
+	seed := []any{"Flock Safety", "Flock Safety", "Genetec", nil}
+	for i, m := range seed {
+		_, err := testPool.Exec(context.Background(), `
+			INSERT INTO camera_sightings (location, source, status, external_id, manufacturer)
+			VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
+			        'osm_import', 'confirmed', $3, $4)
+		`, -89.65, 39.80, fmt.Sprintf("osm:node:%d", i), m)
+		if err != nil {
+			t.Fatalf("seed %d: %v", i, err)
+		}
+	}
+
+	rec := doJSON(t, h, http.MethodGet, "/cameras/manufacturers", nil, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var got []struct {
+		Manufacturer string `json:"manufacturer"`
+		Count        int    `json:"count"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	// NULL manufacturers are excluded — "not recorded" is offered by the UI
+	// as a separate option, not as a vendor name.
+	if len(got) != 2 {
+		t.Fatalf("expected 2 manufacturers, got %d: %+v", len(got), got)
+	}
+	// Most common first.
+	if got[0].Manufacturer != "Flock Safety" || got[0].Count != 2 {
+		t.Errorf("expected Flock Safety with count 2 first, got %+v", got[0])
+	}
+	if got[1].Manufacturer != "Genetec" || got[1].Count != 1 {
+		t.Errorf("expected Genetec with count 1 second, got %+v", got[1])
 	}
 }
 

@@ -96,6 +96,42 @@ func (s *Server) handleListCameras(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, cameras)
 }
 
+// handleListManufacturers returns the manufacturers actually present in the
+// data, with counts, most common first. The filter UI reads this rather than
+// hardcoding a vendor list: OSM contributors add vendors over time, and a
+// static list silently goes wrong (it listed 4 while the data held 20+).
+func (s *Server) handleListManufacturers(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.db.Query(r.Context(), `
+		SELECT manufacturer, count(*)
+		FROM camera_sightings
+		WHERE manufacturer IS NOT NULL
+		GROUP BY manufacturer
+		ORDER BY count(*) DESC, manufacturer ASC
+	`)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "query failed")
+		return
+	}
+	defer rows.Close()
+
+	type manufacturerCount struct {
+		Manufacturer string `json:"manufacturer"`
+		Count        int    `json:"count"`
+	}
+
+	out := []manufacturerCount{}
+	for rows.Next() {
+		var m manufacturerCount
+		if err := rows.Scan(&m.Manufacturer, &m.Count); err != nil {
+			writeError(w, http.StatusInternalServerError, "scan failed")
+			return
+		}
+		out = append(out, m)
+	}
+
+	writeJSON(w, http.StatusOK, out)
+}
+
 type createCameraRequest struct {
 	DeploymentID *string `json:"deployment_id"`
 	Lat          float64 `json:"lat"`

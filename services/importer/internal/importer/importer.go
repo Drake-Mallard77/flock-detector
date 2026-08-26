@@ -62,13 +62,11 @@ func UpsertNodes(ctx context.Context, pool *pgxpool.Pool, state string, nodes []
 			cameraType = &ct
 		}
 
-		// Left NULL when OSM doesn't say, rather than guessed — an unknown
-		// manufacturer is surfaced as unknown, matching how the rest of the
-		// atlas treats gaps.
-		var manufacturer *string
-		if mf, ok := n.Tags["manufacturer"]; ok && mf != "" {
-			manufacturer = &mf
-		}
+		// Normalized, not stored raw: OSM's free-text manufacturer tag
+		// spells the same vendor several ways. NULL when absent or when the
+		// tag itself says "unknown" — a gap is surfaced as a gap, matching
+		// how the rest of the atlas treats missing data.
+		manufacturer := NormalizeManufacturer(n.Tags["manufacturer"])
 
 		var inserted bool
 		err := pool.QueryRow(ctx, `

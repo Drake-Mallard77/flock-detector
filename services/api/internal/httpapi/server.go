@@ -67,6 +67,7 @@ func (s *Server) Router() http.Handler {
 	r.Route("/cameras", func(r chi.Router) {
 		r.Get("/", s.handleListCameras)
 		r.With(s.submissionLimiter.middleware).Post("/", s.handleCreateCamera)
+		r.Get("/manufacturers", s.handleListManufacturers)
 	})
 
 	// Dev-only auth stub: issues a JWT for local testing without wiring up

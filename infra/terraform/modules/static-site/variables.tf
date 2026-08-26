@@ -24,6 +24,6 @@ variable "cpu" {
 
 variable "memory" {
   type        = string
-  default     = "256Mi"
-  description = "Caddy serving static files needs very little; the app itself runs in the visitor's browser."
+  default     = "512Mi"
+  description = "Caddy serving static files needs far less than this, but Cloud Run rejects anything under 512Mi at 1 CPU. Lowering it requires lowering cpu too."
 }

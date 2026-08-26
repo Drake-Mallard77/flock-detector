@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 
-import { listCameras, type CameraFilters, type CameraSighting } from "../lib/api";
+import {
+  listCameras,
+  listManufacturers,
+  type CameraFilters,
+  type CameraSighting,
+  type ManufacturerCount,
+} from "../lib/api";
 
 // CARTO's Positron basemap, NOT tile.openstreetmap.org. OSM's tile servers
 // actively block application traffic under their tile usage policy
@@ -54,11 +60,6 @@ function clampBBox(b: maplibregl.LngLatBounds): [number, number, number, number]
 // response hits exactly this, results were almost certainly truncated.
 const API_LIMIT = 1000;
 
-// The ALPR manufacturers OSM actually records in the US, most common first.
-// Kept a static list rather than deriving it from the loaded viewport —
-// options shouldn't appear and disappear as the user pans.
-const MANUFACTURERS = ["Flock Safety", "Motorola Solutions", "Genetec", "Leonardo"];
-
 /**
  * Escapes text before it goes into a MapLibre popup.
  *
@@ -83,6 +84,7 @@ export default function MapPage() {
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<CameraFilters>({});
+  const [manufacturers, setManufacturers] = useState<ManufacturerCount[]>([]);
 
   // loadCameras runs from map event handlers that are registered once, so
   // reading `filters` directly there would capture the initial value. A ref
@@ -218,6 +220,16 @@ export default function MapPage() {
     };
   }, []);
 
+  // Vendor list comes from the data, not a hardcoded array — OSM
+  // contributors add manufacturers over time, and a static list goes
+  // silently out of date (it once listed 4 while the data held 20+).
+  // A failure here only costs the dropdown, so it doesn't surface an error.
+  useEffect(() => {
+    listManufacturers()
+      .then(setManufacturers)
+      .catch(() => setManufacturers([]));
+  }, []);
+
   // Refetch when a filter changes (the map-event path only fires on pan/zoom).
   useEffect(() => {
     const m = map.current;
@@ -299,9 +311,9 @@ export default function MapPage() {
             onChange={(e) => setFilter("manufacturer", e.target.value)}
           >
             <option value="">Any manufacturer</option>
-            {MANUFACTURERS.map((m) => (
-              <option key={m} value={m}>
-                {m}
+            {manufacturers.map((m) => (
+              <option key={m.manufacturer} value={m.manufacturer}>
+                {m.manufacturer} ({m.count.toLocaleString()})
               </option>
             ))}
             <option value="unknown">Not recorded</option>
