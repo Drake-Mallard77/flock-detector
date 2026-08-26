@@ -47,10 +47,10 @@ flock-detector/
   packages/
     shared-types/   OpenAPI schema -> generated TS types, web+mobile       [Phase 4]
   infra/
-    terraform/      OCI network/compute/storage modules                   [Phase 2 — done]
+    terraform/      modules/cloud-run + environments/gcp — live deploy    [Phase 2 — done]
+                    modules/{network,compute,storage} + environments/prod
+                    — OCI, dormant (Always Free capacity never freed up)
     docker/         Local dev Dockerfile + docker-compose                 [Phase 1 — done]
-                    (prod compose/Caddyfile live inside the compute
-                    module's own template bundle, not here — see below)
   docs/
 ```
 
@@ -76,43 +76,63 @@ flock-detector/
   abuse prevention. Test suite (`internal/httpapi/*_test.go`) uses testcontainers-go against
   real Postgres+PostGIS, not mocks.
 
-## Infrastructure (OCI, Terraform) — Phase 2, done
+## Infrastructure — GCP Cloud Run + Neon (live), OCI (dormant)
 
-`infra/terraform/{modules/{network,compute,storage},environments/prod}`. See
-[infra/terraform/README.md](../infra/terraform/README.md) for the operational how-to
-(prerequisites, deploying, day-2 config changes, destroying).
+`infra/terraform/{modules/cloud-run,environments/gcp}`. See
+[infra/terraform/README.md](../infra/terraform/README.md) for the operational how-to.
 
-- Compute: `oci_core_instance`, shape `VM.Standard.A1.Flex`, `ocpus=2, memory_in_gbs=12`
-  (current Always Free ARM allocation). Cloud-init (self-contained inside the compute module's
-  `templates/` dir) installs Docker via the official apt repo (GPG-verified, not curl|sh),
-  mounts the separately-attached data volume, and brings up a compose stack of `api` +
-  `postgis/postgis` + Caddy (automatic HTTPS once a domain is set; plain HTTP on the bare IP
-  until then).
-- Network: `oci_core_vcn` + subnet + internet gateway + security list. Port 80/443 source
-  CIDRs default to the whole internet (nothing fronts the origin yet) but are a variable
-  (`http_source_cidrs`) specifically so they can be narrowed to Cloudflare's published ranges
-  once Cloudflare is in front — see "Planned: Cloudflare" below. SSH is restricted to a
-  required `ssh_source_cidr` (your IP, not `0.0.0.0/0`).
-- Storage: a dedicated `oci_core_volume` (separate from the boot volume) + paravirtualized
-  attachment, so Postgres data survives instance recreation, with
-  `oci_core_volume_backup_policy` for daily backups (5/month included in Always Free).
-- Images: `.github/workflows/publish-api-image.yml` builds & pushes `services/api` to
-  `ghcr.io/<owner>/flock-detector-api` on changes to `services/api/**`; cloud-init pulls this.
-- Remote state: `backend "oci" {}` (Terraform ≥ 1.12's native backend) — **unverified against a
-  real account while building this**, flagged clearly in `versions.tf` and the Terraform
-  README, with the older S3-compatible-endpoint approach documented as a fallback.
-- Known risk: A1.Flex "out of host capacity" errors are common on Always Free — the Terraform
-  README documents a retry/alternate-AD fallback.
+**Live deployment**: `https://flockwatch-api-wlfs54kbla-uc.a.run.app`
 
-### Planned: Cloudflare in front of the origin
+The original plan was OCI (`VM.Standard.A1.Flex` Always Free) — that Terraform
+(`infra/terraform/{modules/{network,compute,storage},environments/prod}`) is left in place, not
+deleted, but is **not the active deployment target**: ~40 `terraform apply` attempts over two
+days all failed with "out of host capacity" in `ca-toronto-1`, a well-documented Always Free
+ARM shortage that showed no sign of clearing. Pivoted to GCP:
 
-Confirmed direction, not yet built (needs a domain + Cloudflare account, which this session
-doesn't have): once a domain exists, front the OCI instance with Cloudflare's free tier — free
-WAF-lite rules, DDoS absorption, edge rate limiting, and it hides the origin IP entirely (OCI's
-own WAF/WAAS is a paid add-on, not available on Always Free). At that point,
-`http_source_cidrs` should be narrowed from `0.0.0.0/0` to Cloudflare's published IP ranges
-(https://www.cloudflare.com/ips/) so the origin only accepts traffic that's already passed
-through Cloudflare's layer.
+- **Cloud Run** (serverless containers), not a VM: no reserved-capacity pool to run out of —
+  Google allocates per-request rather than reserving a slot ahead of time. `min_instance_count
+  = 0` (scale to zero), so cost approaches $0 at low/idle traffic rather than paying for a VM
+  provisioned 24/7. First real apply succeeded in under a minute.
+- **Neon** (neon.tech) for Postgres+PostGIS instead of a self-hosted container: serverless,
+  free tier, autosuspends when idle. Removes the entire class of problems the OCI path needed
+  Terraform for (persistent volume, backup policy, cloud-init mount scripting) — the database
+  isn't infrastructure we manage at all anymore.
+- Image: pulled from GHCR through an **Artifact Registry remote repository** (`ghcr-mirror`),
+  not directly — Google's docs recommend this for reliability over a direct public-GHCR pull.
+  Deployed **by digest** (`image_digest` variable, `sha256:...`), not the `:latest` tag: a
+  floating-tag deploy silently failed to pick up a fresh push (Terraform saw no string diff on
+  the image reference; even a forced `gcloud run deploy` with the same tag served a stale build
+  from the AR mirror's own tag cache). Same reasoning as pinning GitHub Actions to a commit SHA.
+- `DATABASE_URL`/`JWT_SECRET` in **Secret Manager**, injected via `secret_key_ref`, not plain
+  Cloud Run env vars.
+- **Known Cloud Run quirk**: the health endpoint is `/health`, not `/healthz` — Google's
+  front-end infrastructure intercepts requests to the literal path `/healthz` before they reach
+  the container (confirmed by comparing against `/`, `/deployments`, and an arbitrary unclaimed
+  path, which all correctly reached the app). Renamed throughout rather than worked around.
+- Remote state: not yet set up (local `terraform.tfstate`, gitignored) — same "get the first
+  real deploy working before debugging a backend" reasoning as the OCI path originally had.
+- GCP requires a billing account (payment method) linked even for Always-Free-only usage,
+  unlike OCI where Always Free genuinely cannot bill — not a cost concern as long as usage
+  stays within free tier, just worth knowing going in.
+
+### Cloudflare — not currently planned for this path
+
+The earlier plan to front OCI with Cloudflare (WAF, DDoS absorption, hiding the origin IP) was
+specific to self-hosting on a VM with a public IP. Cloud Run already provides managed TLS and
+sits behind Google's own front-end infrastructure rather than exposing a raw origin IP, so the
+original rationale doesn't carry over directly — revisit if/when this needs edge-level
+rate limiting or WAF rules beyond what Cloud Run itself offers.
+
+### Two parallel implementations exist in this repo — don't build on `apps/web`
+
+A ChatGPT/OpenAI Sites integration connected to this GitHub repo independently pushes and
+merges its own implementation under `apps/web/` (Next.js/vinext, Cloudflare D1, Drizzle ORM) —
+matching the live `flockwatch-us.simwes07.chatgpt.site` prototype. It is **not** part of this
+architecture: different backend, different cloud platform, not reviewed the way the Go/GCP side
+has been. Confirmed direction (2026-08-25): the Go + GCP stack documented here is the actual
+product; `apps/web`'s content should be left alone, not extended or depended on. It may
+reappear via a future auto-merge from that integration — if so, treat it the same way: leave it
+untouched, don't rebase this architecture around it.
 
 ## Local development
 
@@ -127,9 +147,9 @@ startup). See `services/api/README.md` for endpoint details and a dev-login exam
 ## Rollout phases
 
 1. **Monorepo scaffold + Go API + Postgres/PostGIS schema + local Docker Compose — done.**
-2. **Terraform (network/compute/storage) + cloud-init + GHCR image publish — done.** (First
-   real `terraform apply` against a live OCI account is still pending — see the Terraform
-   README's prerequisites.)
+2. **Terraform + GHCR image publish + first real deploy — done, on GCP Cloud Run + Neon**
+   (pivoted from OCI after ~40 failed applies against Always Free ARM capacity — see above).
+   Live at `https://flockwatch-api-wlfs54kbla-uc.a.run.app`.
 3. OSM/DeFlock importer.
 4. Web app (map, deployments list/detail, methodology, submission form).
 5. Real auth (replacing the dev-login stub) + Review Desk moderation UI.

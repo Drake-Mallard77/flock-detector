@@ -1,10 +1,132 @@
 # infra/terraform
 
-Deploys FlockWatch's API + Postgres/PostGIS + Caddy to a single OCI Always
-Free ARM VM. See [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) for the
-overall design and rationale; this file is the operational how-to.
+Deploys FlockWatch's API to **GCP Cloud Run**, with **Neon** (neon.tech) for
+Postgres/PostGIS. See [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) for
+the full rationale — in short, this replaced an original OCI/VM plan after
+~40 failed `terraform apply` attempts over two days against OCI's Always
+Free ARM capacity in `ca-toronto-1`. That OCI Terraform is still in this
+repo (`modules/{network,compute,storage}`, `environments/prod`) but is
+**dormant, not the active deployment target** — see the appendix at the
+bottom if you want to revisit it.
 
 ## Layout
+
+```
+modules/
+  cloud-run/   Cloud Run v2 service + AR remote-repo mirror + Secret Manager
+environments/
+  gcp/         Root module wiring the above together — the live deployment
+  prod/        OCI (network/compute/storage) — dormant, see appendix
+modules/{network,compute,storage}  OCI — dormant, see appendix
+```
+
+## One-time prerequisites
+
+1. **A GCP project with billing linked.** GCP requires a payment method on
+   file even for Always-Free-only usage (unlike OCI, where Always Free
+   genuinely cannot bill you) — as long as usage stays within free tier
+   limits, cost is $0, but the card requirement is worth knowing upfront.
+   Console → Billing → create a billing account → link it to your project.
+2. **`gcloud` CLI, authenticated**: `gcloud auth login` (for the CLI itself)
+   and separately `gcloud auth application-default login` (for Terraform —
+   these are two different credential grants). Enable the APIs this needs:
+   ```
+   gcloud services enable run.googleapis.com artifactregistry.googleapis.com \
+     secretmanager.googleapis.com --project=<your-project-id>
+   ```
+3. **A Neon project** (neon.tech) with the connection string handy:
+   ```
+   npm install -g neonctl
+   neonctl auth
+   neonctl projects create --name flockwatch --org-id <your-org-id>
+   ```
+   Prints a `postgresql://...` connection URI — that's `database_url`. The
+   API's own migration runner creates the PostGIS extension on first
+   connect, so no manual Neon-side setup beyond creating the project.
+4. **A published API image and its digest** —
+   `.github/workflows/publish-api-image.yml` builds and pushes
+   `services/api` to `ghcr.io/<owner>/flock-detector-api` on every push to
+   `main` that touches `services/api/**`. Get the current digest (not the
+   `:latest` tag — see "Why a digest, not a tag" below):
+   ```
+   docker pull ghcr.io/<owner>/flock-detector-api:latest
+   ```
+5. **A secret**: `openssl rand -base64 32` for `jwt_secret`.
+
+## Deploying
+
+```
+cd infra/terraform/environments/gcp
+cp terraform.tfvars.example terraform.tfvars   # fill in your real values
+terraform init
+terraform plan
+terraform apply
+```
+
+**Never paste a connection string, key, or secret from this process into a
+chat with an AI assistant, this repo, or anywhere else public** — the only
+place `terraform.tfvars` should exist is your local machine (it's
+gitignored).
+
+### Why a digest, not a tag
+
+`image_digest` is a required variable (`sha256:...`), not a default
+`:latest`. This isn't just caution — it was a real bug found while
+deploying: after pushing a fix and a fresh GHCR image, `terraform apply`
+saw the same `:latest` string as before and silently skipped updating the
+service. Even forcing it with `gcloud run deploy` using the same tag served
+a **stale** build, because the Artifact Registry remote-repository mirror
+in front of `ghcr.io` has its own tag-resolution cache, separate from
+GHCR's. Deploying by digest means every apply deploys exactly the image you
+chose — same reasoning as pinning GitHub Actions to a commit SHA rather
+than a floating version tag.
+
+## After `apply`
+
+- `terraform output url` gives you the live HTTPS URL — TLS is automatic,
+  no Caddy/cert management needed.
+- `curl $(terraform output -raw url)/health` should return `{"status":"ok"}`.
+  **Not `/healthz`** — Google's Cloud Run front-end infrastructure
+  intercepts requests to that exact path before they reach the container
+  (confirmed by comparing against `/`, `/deployments`, and an arbitrary
+  unclaimed path, which all correctly reached the app). The app's health
+  endpoint is named `/health` specifically to avoid this collision.
+
+## Redeploying after a new image push
+
+Get the new digest and re-apply with it:
+
+```
+docker pull ghcr.io/<owner>/flock-detector-api:latest   # prints the digest
+# update image_digest in terraform.tfvars
+terraform apply
+```
+
+## Cost notes
+
+Cloud Run's `min_instance_count = 0` (scale to zero) means cost tracks
+actual usage rather than a VM reserved 24/7 — at low/idle traffic, this
+approaches $0. Neon's free tier covers Postgres/PostGIS with autosuspend.
+Watch for:
+
+- **Cloud Run's free egress allowance** is limited, similar in spirit to
+  OCI's — real sustained traffic could incur charges.
+- **Neon's free tier storage/compute-hour limits** if the dataset or query
+  volume grows significantly past an MVP.
+- **A custom domain + Cloudflare** aren't currently planned for this path
+  (Cloud Run already provides managed TLS and doesn't expose a raw origin
+  IP the way the OCI VM plan would have) — see docs/ARCHITECTURE.md if that
+  changes.
+
+---
+
+## Appendix: OCI (dormant)
+
+The original plan, kept in the repo as real work that may be worth
+revisiting if Oracle's Always Free ARM capacity in a given region ever
+frees up, but **not currently deployed or maintained as the active path**.
+
+### Layout
 
 ```
 modules/
@@ -15,7 +137,7 @@ environments/
   prod/      Root module wiring the three together
 ```
 
-## One-time prerequisites
+### One-time prerequisites
 
 1. **OCI CLI auth**: run `oci setup config` and follow the wizard — it
    generates an API signing key pair locally and writes `~/.oci/config`,
@@ -38,16 +160,10 @@ environments/
      --operating-system "Canonical Ubuntu" --shape "VM.Standard.A1.Flex" \
      --region <your-region>
    ```
-5. **A published API image** — `app_image` needs to point at something
-   real. `.github/workflows/publish-api-image.yml` builds and pushes
-   `services/api` to `ghcr.io/<owner>/flock-detector-api` on every push to
-   `main` that touches `services/api/**`; it should already exist by the
-   time you're reading this, but confirm at
-   `https://github.com/<owner>/flock-detector/pkgs/container/flock-detector-api`.
-6. **Secrets**: `openssl rand -base64 24` for `db_password`,
+5. **Secrets**: `openssl rand -base64 24` for `db_password`,
    `openssl rand -base64 32` for `jwt_secret`.
 
-## Deploying
+### Deploying
 
 ```
 cd infra/terraform/environments/prod
@@ -57,53 +173,28 @@ terraform plan
 terraform apply
 ```
 
-**Never paste an OCID, key, or secret from this process into a chat with an
-AI assistant, this repo, or anywhere else public** — the only place
-`terraform.tfvars` should exist is your local machine (it's gitignored) and,
-if you set up remote state, inside Terraform state (also treat that as a
-secret — see below).
-
 ### Remote state backend — unverified, check before trusting
 
-`versions.tf` declares `backend "oci" {}`, Oracle's newer native backend
-type (Terraform ≥ 1.12) for storing state in Object Storage. **This was
-written without access to a real OCI account to test against — verify it
-actually works on `terraform init` before relying on it.** If it doesn't
-behave as documented on your Terraform version, the fallback is the older,
-more battle-tested approach: an Object Storage bucket's S3-compatible
-endpoint (`https://<namespace>.compat.objectstorage.<region>.oraclecloud.com`)
-with the generic `s3` backend and OCI Customer Secret Keys. Either way,
-**Terraform state contains your secrets in plaintext** (db_password,
-jwt_secret) — treat the state file/bucket with the same care as the
-`.tfvars` file itself.
+`versions.tf` has a commented-out `backend "oci" {}` block, Oracle's newer
+native backend type (Terraform ≥ 1.12) for storing state in Object
+Storage. **This was written without access to a real OCI account to test
+against — verify it actually works on `terraform init` before relying on
+it.** The fallback is the older, more battle-tested approach: an Object
+Storage bucket's S3-compatible endpoint with the generic `s3` backend and
+OCI Customer Secret Keys.
 
-### Known risk: Always Free capacity
+### Known blocker: Always Free capacity
 
-`VM.Standard.A1.Flex` Always Free capacity is genuinely scarce in some
-regions/availability domains. If `apply` fails with an out-of-capacity
-error, try again (capacity frees up), or edit
-`environments/prod/main.tf`'s `local.availability_domain` to try a
-different AD index, or reduce `ocpus`/`memory_gbs` in `terraform.tfvars`
-(the module defaults to 2 OCPU/12GB, the full current Always Free ARM
-allocation — dropping to 1 OCPU/6GB, like the reference config this was
-partly informed by, doubles your odds of finding capacity at the cost of
-some headroom).
+`VM.Standard.A1.Flex` Always Free capacity was persistently exhausted in
+`ca-toronto-1` across ~40 attempts over two days, including at the reduced
+1 OCPU/6GB shape (`ocpus`/`memory_gbs` in `terraform.tfvars`). This is a
+well-documented, common issue with OCI's Always Free ARM allocation,
+particularly in smaller/newer regions. If retrying, a different region
+(subject to your tenancy's region-subscription limit — Free Trial accounts
+can be capped at just the home region) or a longer retry window may
+eventually succeed.
 
-## After `apply`
-
-- `terraform output url` gives you the reachable address — plain HTTP on
-  the bare IP until you set `domain`.
-- `curl $(terraform output -raw url)/health` should return `{"status":"ok"}` — not `/healthz`: on
-  Cloud Run specifically, that exact path is intercepted by Google's front-end infrastructure
-  before it reaches the container (confirmed while deploying — see docs/ARCHITECTURE.md), so a
-  request to `/healthz` returns a generic Google 404 page instead of ever reaching the app.
-  within a few minutes of `apply` completing (cloud-init needs time to
-  install Docker, mount the data volume, and pull images).
-- If it's not up after ~10 minutes, SSH in
-  (`ssh ubuntu@$(terraform output -raw public_ip)`) and check
-  `sudo cat /var/log/cloud-init-output.log` for what went wrong.
-
-## Day-2 config changes (important limitation)
+### Day-2 config changes (important limitation)
 
 `user_data` (cloud-init) only runs on an instance's **first boot**.
 Changing `app_image`, `db_password`, `jwt_secret`, `allowed_origin`, or
@@ -121,7 +212,7 @@ but won't retroactively reconfigure a running instance. For now, either:
   volume (module.storage) is untouched by this, so Postgres data survives —
   that's the whole reason it's a separate volume.
 
-## Destroying
+### Destroying
 
 ```
 terraform destroy
@@ -131,20 +222,3 @@ Note the data volume's daily backups (5/month included in Always Free) are
 **not** automatically deleted by `destroy` unless they're tied to the
 volume's lifecycle — check the OCI console under Block Storage → Backups
 if you want to fully clean up a test environment.
-
-## Cost notes
-
-Everything here defaults to Always Free shapes/sizes (`VM.Standard.A1.Flex`
-at 2 OCPU/12GB, a 50GB boot volume, a 50GB data volume — 100GB combined,
-under the 200GB Always Free boot+block budget). Nothing here provisions a
-load balancer, NAT gateway, or managed database, all of which have real
-costs. Upgrade triggers worth watching for:
-
-- **Object storage** once evidence-photo uploads (Phase 4+) are implemented.
-- **A managed database** if losing this one VM would exceed your acceptable
-  recovery window (the daily-backup policy mitigates but doesn't eliminate
-  this).
-- **A load balancer** only if/when this becomes more than one instance.
-- **Cloudflare** (free tier) once a domain is in place — see
-  docs/ARCHITECTURE.md; this also gets you free WAF-lite rules and DDoS
-  absorption, which OCI's native WAF does not offer on Always Free.
