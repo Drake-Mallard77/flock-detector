@@ -12,15 +12,20 @@ type Config struct {
 	JWTSecret     string
 	AllowedOrigin string
 	Env           string
+	// GoogleClientID is the OAuth client the browser signs in against. It
+	// doubles as the expected `aud` when validating ID tokens, so an empty
+	// value must disable Google sign-in entirely rather than skip the check.
+	GoogleClientID string
 }
 
 func Load() Config {
 	return Config{
-		Port:          getenv("PORT", "8080"),
-		DatabaseURL:   getenv("DATABASE_URL", "postgres://flockwatch:flockwatch@localhost:5432/flockwatch?sslmode=disable"),
-		JWTSecret:     getenv("JWT_SECRET", "dev-secret-change-me"),
-		AllowedOrigin: getenv("ALLOWED_ORIGIN", "http://localhost:5173"),
-		Env:           getenv("ENV", "development"),
+		Port:           getenv("PORT", "8080"),
+		DatabaseURL:    getenv("DATABASE_URL", "postgres://flockwatch:flockwatch@localhost:5432/flockwatch?sslmode=disable"),
+		JWTSecret:      getenv("JWT_SECRET", "dev-secret-change-me"),
+		AllowedOrigin:  getenv("ALLOWED_ORIGIN", "http://localhost:5173"),
+		Env:            getenv("ENV", "development"),
+		GoogleClientID: getenv("GOOGLE_CLIENT_ID", ""),
 	}
 }
 

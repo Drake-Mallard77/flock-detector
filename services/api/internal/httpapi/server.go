@@ -70,12 +70,23 @@ func (s *Server) Router() http.Handler {
 		r.Get("/manufacturers", s.handleListManufacturers)
 	})
 
-	// Dev-only auth stub: issues a JWT for local testing without wiring up
-	// real email magic-link/OAuth yet (tracked for the auth+Review Desk
-	// phase). Not mounted with any protection — do not enable in prod.
-	if s.cfg.DevAuthEnabled() {
-		r.Post("/auth/dev-login", s.handleDevLogin)
-	}
+	r.Route("/auth", func(r chi.Router) {
+		// Real sign-in. Rate limited because it's the highest-value
+		// endpoint on the site: a moderator session can rewrite the public
+		// record, so it shouldn't be freely brute-forceable.
+		r.With(s.submissionLimiter.middleware).Post("/google", s.handleGoogleLogin)
+
+		// Who am I? Lets the web app restore a session on reload without
+		// trusting anything it stored client-side.
+		r.With(s.requireAuth).Get("/me", s.handleMe)
+
+		// Dev-only stub that mints a token for any email/role with no
+		// verification. Never mounted when ENV=production — it would be a
+		// complete authentication bypass.
+		if s.cfg.DevAuthEnabled() {
+			r.Post("/dev-login", s.handleDevLogin)
+		}
+	})
 
 	return r
 }

@@ -67,6 +67,14 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 
 // requireRole wraps requireAuth and additionally checks the caller's role is
 // one of the allowed roles (e.g. "moderator", "admin").
+//
+// The role is re-read from the database on every request rather than trusted
+// from the token's claims. Tokens live for 24h, so a role revoked after a
+// token was issued would otherwise keep working for the rest of that window —
+// on a site where a moderator session can rewrite the public record, losing
+// the ability to revoke access promptly is not acceptable. The extra query
+// only runs on role-gated endpoints, which are moderation actions rather
+// than hot paths.
 func (s *Server) requireRole(allowed ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return s.requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -75,8 +83,17 @@ func (s *Server) requireRole(allowed ...string) func(http.Handler) http.Handler 
 				writeError(w, http.StatusUnauthorized, "missing claims")
 				return
 			}
+
+			var currentRole string
+			if err := s.db.QueryRow(r.Context(),
+				`SELECT role FROM users WHERE id = $1`, c.Subject,
+			).Scan(&currentRole); err != nil {
+				writeError(w, http.StatusUnauthorized, "session is no longer valid")
+				return
+			}
+
 			for _, role := range allowed {
-				if c.Role == role {
+				if currentRole == role {
 					next.ServeHTTP(w, r)
 					return
 				}

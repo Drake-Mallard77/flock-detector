@@ -16,10 +16,16 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"flockwatch/importer/internal/overpass"
 )
+
+// Rows per round trip. Large enough that a big state is tens of batches
+// rather than thousands of round trips, small enough that a dropped
+// connection loses little work and memory stays flat.
+const batchSize = 500
 
 type Stats struct {
 	Fetched  int
@@ -38,6 +44,36 @@ type Stats struct {
 // queue would bury the genuinely-needs-review user submissions.
 func UpsertNodes(ctx context.Context, pool *pgxpool.Pool, state string, nodes []overpass.Node) (Stats, error) {
 	stats := Stats{Fetched: len(nodes)}
+
+	// Batched rather than one round trip per node. Against a remote
+	// serverless Postgres (Neon) the row-at-a-time version took over an
+	// hour for a single large state and was killed partway through by a
+	// dropped connection — thousands of sequential round trips is both slow
+	// and a long window in which anything can interrupt.
+	batch := &pgx.Batch{}
+	flush := func() error {
+		if batch.Len() == 0 {
+			return nil
+		}
+		results := pool.SendBatch(ctx, batch)
+		for i := 0; i < batch.Len(); i++ {
+			var inserted bool
+			if err := results.QueryRow().Scan(&inserted); err != nil {
+				results.Close()
+				return err
+			}
+			if inserted {
+				stats.Inserted++
+			} else {
+				stats.Updated++
+			}
+		}
+		if err := results.Close(); err != nil {
+			return err
+		}
+		batch = &pgx.Batch{}
+		return nil
+	}
 
 	for _, n := range nodes {
 		if n.Lat == 0 && n.Lon == 0 {
@@ -68,8 +104,7 @@ func UpsertNodes(ctx context.Context, pool *pgxpool.Pool, state string, nodes []
 		// how the rest of the atlas treats missing data.
 		manufacturer := NormalizeManufacturer(n.Tags["manufacturer"])
 
-		var inserted bool
-		err := pool.QueryRow(ctx, `
+		batch.Queue(`
 			INSERT INTO camera_sightings (
 				location, direction, camera_type, manufacturer,
 				source, status, external_id, state
@@ -85,16 +120,17 @@ func UpsertNodes(ctx context.Context, pool *pgxpool.Pool, state string, nodes []
 				manufacturer = EXCLUDED.manufacturer,
 				state        = EXCLUDED.state
 			RETURNING (xmax = 0) AS inserted
-		`, n.Lon, n.Lat, direction, cameraType, manufacturer, externalID, state).Scan(&inserted)
-		if err != nil {
-			return stats, fmt.Errorf("upsert node %d: %w", n.ID, err)
-		}
+		`, n.Lon, n.Lat, direction, cameraType, manufacturer, externalID, state)
 
-		if inserted {
-			stats.Inserted++
-		} else {
-			stats.Updated++
+		if batch.Len() >= batchSize {
+			if err := flush(); err != nil {
+				return stats, fmt.Errorf("upsert batch: %w", err)
+			}
 		}
+	}
+
+	if err := flush(); err != nil {
+		return stats, fmt.Errorf("upsert final batch: %w", err)
 	}
 
 	return stats, nil
