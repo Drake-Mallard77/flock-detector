@@ -28,3 +28,23 @@ module "atlas" {
     var.atlas_image_digest,
   )
 }
+
+# Scheduled data maintenance. Reuses the API's runtime service account and
+# its Secret Manager reference rather than minting a second credential —
+# the jobs need exactly the database access the API already has.
+module "jobs" {
+  source = "../../modules/scheduled-jobs"
+
+  project_id = var.project_id
+  region     = var.region
+  image = format(
+    "%s-docker.pkg.dev/%s/ghcr-mirror/%s@%s",
+    var.region,
+    var.project_id,
+    var.importer_ghcr_owner_repo,
+    var.importer_image_digest,
+  )
+
+  database_url_secret_id = module.cloud_run.database_url_secret_id
+  service_account_email  = module.cloud_run.runtime_service_account
+}

@@ -1,14 +1,16 @@
 // Package importer upserts OSM-sourced ALPR camera nodes into
 // camera_sightings.
 //
-// Scope note: this deliberately populates ONLY the camera_sightings
-// (precise-pin) layer, never deployments. A deployments row is a
-// public-records claim about a named agency — backed by a council report,
-// contract, FOIA response, etc. An OSM node is a crowdsourced map pin; its
-// `operator` tag is a hint, not evidence, and auto-promoting those into
-// agency-level records would put unverified claims about specific police
-// departments into the part of the site that presents itself as
-// records-backed. A moderator can link OSM cameras to a deployment by hand.
+// Scope note: this populates ONLY the camera_sightings (precise-pin)
+// layer. It never writes a published deployment record. A deployments row
+// is a public-records claim about a named agency — backed by a council
+// report, contract, or FOIA response — whereas an OSM node is a
+// crowdsourced map pin whose `operator` tag is a lead, not evidence.
+//
+// The sibling derive-deployments command turns those leads into
+// under_review CANDIDATES for a human to confirm or reject. Nothing it
+// produces is publicly visible until a moderator acts, so unverified
+// claims about specific police departments never appear as fact.
 package importer
 
 import (
@@ -104,13 +106,17 @@ func UpsertNodes(ctx context.Context, pool *pgxpool.Pool, state string, nodes []
 		// how the rest of the atlas treats missing data.
 		manufacturer := NormalizeManufacturer(n.Tags["manufacturer"])
 
+		// Who runs the camera, when OSM says. Vendor names are rejected —
+		// see NormalizeOperator.
+		operator := NormalizeOperator(n.Tags["operator"])
+
 		batch.Queue(`
 			INSERT INTO camera_sightings (
-				location, direction, camera_type, manufacturer,
+				location, direction, camera_type, manufacturer, operator,
 				source, status, external_id, state
 			) VALUES (
 				ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
-				$3, $4, $5, 'osm_import', 'confirmed', $6, $7
+				$3, $4, $5, $6, 'osm_import', 'confirmed', $7, $8
 			)
 			ON CONFLICT (external_id) WHERE external_id IS NOT NULL
 			DO UPDATE SET
@@ -118,9 +124,10 @@ func UpsertNodes(ctx context.Context, pool *pgxpool.Pool, state string, nodes []
 				direction    = EXCLUDED.direction,
 				camera_type  = EXCLUDED.camera_type,
 				manufacturer = EXCLUDED.manufacturer,
+				operator     = EXCLUDED.operator,
 				state        = EXCLUDED.state
 			RETURNING (xmax = 0) AS inserted
-		`, n.Lon, n.Lat, direction, cameraType, manufacturer, externalID, state)
+		`, n.Lon, n.Lat, direction, cameraType, manufacturer, operator, externalID, state)
 
 		if batch.Len() >= batchSize {
 			if err := flush(); err != nil {

@@ -49,3 +49,14 @@ variable "google_client_id" {
   default     = ""
   description = "OAuth client ID for Google sign-in. Public by design; see modules/cloud-run/variables.tf."
 }
+
+variable "importer_ghcr_owner_repo" {
+  type        = string
+  default     = "drake-mallard77/flock-detector-importer"
+  description = "Path portion of the importer's GHCR image, after the ghcr.io host."
+}
+
+variable "importer_image_digest" {
+  type        = string
+  description = "sha256:... digest of the published importer image. See modules/cloud-run/variables.tf for why a digest, not a tag."
+}
