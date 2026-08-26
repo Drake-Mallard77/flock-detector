@@ -3,22 +3,52 @@ import maplibregl from "maplibre-gl";
 
 import { listCameras, type CameraSighting } from "../lib/api";
 
-// OSM raster tiles via a free public endpoint — no API key, no vendor
-// lock-in, and consistent with the ODbL-attributed data underneath. If tile
-// usage ever gets heavy enough to strain OSM's tile policy, this is the
-// thing to swap for a self-hosted or paid vector source.
+// CARTO's Positron basemap, NOT tile.openstreetmap.org. OSM's tile servers
+// actively block application traffic under their tile usage policy
+// (https://operations.osmfoundation.org/policies/tiles/) — they return
+// HTTP 200 with an `x-blocked: Access denied` header and a placeholder
+// image, so the map looks silently broken rather than erroring. CARTO
+// permits this use and its muted palette suits a records project.
+// The underlying data is still OSM-derived, hence both attributions.
 const STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
-    osm: {
+    basemap: {
       type: "raster",
-      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      tiles: [
+        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+      ],
       tileSize: 256,
-      attribution: "© OpenStreetMap contributors",
+      attribution:
+        '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
     },
   },
-  layers: [{ id: "osm", type: "raster", source: "osm" }],
+  layers: [{ id: "basemap", type: "raster", source: "basemap" }],
 };
+
+/**
+ * Clamps a viewport to valid WGS84 ranges.
+ *
+ * At low zoom on a wide screen, MapLibre's getBounds() legitimately returns
+ * longitudes outside [-180, 180] (the world repeats horizontally). Passing
+ * those straight through made the API return an empty array with HTTP 200 —
+ * no error, just a silently empty map. If the view spans more than the whole
+ * globe, fall back to full world coverage rather than an inverted box.
+ */
+function clampBBox(b: maplibregl.LngLatBounds): [number, number, number, number] {
+  const west = b.getWest();
+  const east = b.getEast();
+  const spansGlobe = east - west >= 360;
+
+  return [
+    spansGlobe ? -180 : Math.max(-180, Math.min(180, west)),
+    Math.max(-90, Math.min(90, b.getSouth())),
+    spansGlobe ? 180 : Math.max(-180, Math.min(180, east)),
+    Math.max(-90, Math.min(90, b.getNorth())),
+  ];
+}
 
 // Mirrors the server-side LIMIT in services/api's handleListCameras. If the
 // response hits exactly this, results were almost certainly truncated.
@@ -45,6 +75,13 @@ export default function MapPage() {
 
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     m.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-right");
+
+    // Surface style/tile failures instead of rendering a blank white page —
+    // the failure mode that hid the OSM tile block during development.
+    m.on("error", (e) => {
+      console.error("MapLibre error:", e.error);
+      setError("The base map failed to load. Camera data may still be listed below.");
+    });
 
     m.on("load", () => {
       m.addSource("cameras", {
@@ -154,13 +191,7 @@ export default function MapPage() {
   }, []);
 
   async function loadCameras(m: maplibregl.Map) {
-    const b = m.getBounds();
-    const bbox: [number, number, number, number] = [
-      b.getWest(),
-      b.getSouth(),
-      b.getEast(),
-      b.getNorth(),
-    ];
+    const bbox = clampBBox(m.getBounds());
 
     try {
       const cameras: CameraSighting[] = await listCameras(bbox);

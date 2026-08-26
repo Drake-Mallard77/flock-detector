@@ -26,13 +26,20 @@ func (s *Server) handleListCameras(w http.ResponseWriter, r *http.Request) {
 		hasBBox = true
 	}
 
+	// The bbox comparison runs in geometry space (location::geometry),
+	// NOT geography. Casting the envelope to geography makes PostGIS
+	// interpret a box wider than 180° as wrapping the *short* way around
+	// the globe, so a zoomed-out viewport (e.g. -170,20,170,55) matched
+	// zero rows and returned an empty map with HTTP 200 — no error to
+	// notice. A map viewport is a planar rectangle in lon/lat, so a planar
+	// comparison is both correct and what the GiST index supports.
 	sql := `
 		SELECT id, deployment_id, ST_Y(location::geometry), ST_X(location::geometry),
 		       direction, camera_type, photo_url, source, status, external_id, state,
 		       created_by, created_at
 		FROM camera_sightings
 		WHERE (
-			NOT $1 OR location && ST_MakeEnvelope($2, $3, $4, $5, 4326)::geography
+			NOT $1 OR location::geometry && ST_MakeEnvelope($2, $3, $4, $5, 4326)
 		)
 		ORDER BY created_at DESC
 		LIMIT 1000

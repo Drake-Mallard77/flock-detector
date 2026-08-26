@@ -51,6 +51,29 @@ func TestListCameras_BBoxFilter(t *testing.T) {
 	}
 }
 
+// Regression test: a viewport wider than 180° must still match. Casting the
+// envelope to geography made PostGIS treat a wide box as wrapping the short
+// way around the globe, so any zoomed-out map view silently returned zero
+// results with HTTP 200. See handleListCameras.
+func TestListCameras_WideBBoxStillMatches(t *testing.T) {
+	s := newTestServer(t)
+	h := s.Router()
+	createCamera(t, h, 39.799, -89.644) // Springfield, IL
+
+	for _, bbox := range []string{
+		"-125,24,-66,50",  // continental US
+		"-170,20,170,55",  // 340° wide — the case that used to return 0
+		"-180,-90,180,90", // whole world
+	} {
+		rec := doJSON(t, h, http.MethodGet, "/cameras?bbox="+bbox, nil, "")
+		var cams []models.CameraSighting
+		json.Unmarshal(rec.Body.Bytes(), &cams)
+		if len(cams) != 1 {
+			t.Errorf("bbox=%s: expected the camera to be found, got %d", bbox, len(cams))
+		}
+	}
+}
+
 func TestListCameras_InvalidBBox(t *testing.T) {
 	s := newTestServer(t)
 	h := s.Router()
