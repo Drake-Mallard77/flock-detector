@@ -17,6 +17,8 @@ infra/terraform/**/*.tfstate
 infra/terraform/**/*.tfstate.*
 infra/terraform/**/*.tfvars
 infra/terraform/**/.terraform.lock.hcl
+infra/terraform/**/tfplan
+infra/terraform/**/*.tfplan
 !infra/terraform/**/*.tfvars.example
 crash.log
 

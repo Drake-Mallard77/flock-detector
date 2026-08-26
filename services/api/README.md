@@ -23,7 +23,7 @@ Migrations in `migrations/*.sql` run automatically on startup.
 
 ```bash
 # Health check
-curl http://localhost:8080/healthz
+curl http://localhost:8080/health
 
 # Submit a deployment (lands in under_review)
 curl -X POST http://localhost:8080/deployments -H 'Content-Type: application/json' -d '{

@@ -51,7 +51,11 @@ func (s *Server) Router() http.Handler {
 		AllowCredentials: true,
 	}))
 
-	r.Get("/healthz", s.handleHealth)
+	// Named /health, not /healthz: Google's front-end infrastructure (Cloud
+	// Run's public routing layer) intercepts requests to /healthz before
+	// they reach the container — confirmed while deploying to Cloud Run,
+	// see docs/ARCHITECTURE.md.
+	r.Get("/health", s.handleHealth)
 
 	r.Route("/deployments", func(r chi.Router) {
 		r.Get("/", s.handleListDeployments)

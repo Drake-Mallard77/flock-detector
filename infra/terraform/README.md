@@ -93,7 +93,10 @@ some headroom).
 
 - `terraform output url` gives you the reachable address — plain HTTP on
   the bare IP until you set `domain`.
-- `curl $(terraform output -raw url)/healthz` should return `{"status":"ok"}`
+- `curl $(terraform output -raw url)/health` should return `{"status":"ok"}` — not `/healthz`: on
+  Cloud Run specifically, that exact path is intercepted by Google's front-end infrastructure
+  before it reaches the container (confirmed while deploying — see docs/ARCHITECTURE.md), so a
+  request to `/healthz` returns a generic Google 404 page instead of ever reaching the app.
   within a few minutes of `apply` completing (cloud-init needs time to
   install Docker, mount the data volume, and pull images).
 - If it's not up after ~10 minutes, SSH in

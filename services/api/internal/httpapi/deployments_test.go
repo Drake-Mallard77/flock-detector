@@ -66,7 +66,7 @@ func loginAs(t *testing.T, s *Server, h http.Handler, email, role string) string
 
 func TestHealthz(t *testing.T) {
 	s := newTestServer(t)
-	rec := doJSON(t, s.Router(), http.MethodGet, "/healthz", nil, "")
+	rec := doJSON(t, s.Router(), http.MethodGet, "/health", nil, "")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}

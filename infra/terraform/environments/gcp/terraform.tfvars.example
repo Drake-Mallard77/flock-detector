@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars (gitignored) and fill in. Never commit the real
+# file — it will contain secrets.
+
+project_id      = "your-gcp-project-id"
+region          = "us-central1"
+ghcr_owner_repo = "your-github-username/flock-detector-api"
+
+# Neon (neon.tech) connection string — free-tier serverless Postgres with
+# PostGIS support. `neonctl projects create` prints this; the api's own
+# migration runner creates the PostGIS extension on first connect.
+database_url = "postgresql://user:password@host/dbname?sslmode=require"
+
+# openssl rand -base64 32
+jwt_secret = "replace-with-32-plus-random-characters"
+
+allowed_origin = "http://localhost:5173" # update once apps/web is deployed (Phase 4)
