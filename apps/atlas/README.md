@@ -1,11 +1,12 @@
 # apps/atlas
 
-The FlockWatch public web app — React + TypeScript + Vite, with MapLibre GL JS over
-OpenStreetMap tiles. Talks to the Go API in [`services/api`](../../services/api).
+The FlockWatch public web app — React + TypeScript + Vite, with Leaflet over
+proxied Esri raster tiles. Talks to the Go API in [`services/api`](../../services/api).
 
-> **Why `apps/atlas` and not `apps/web`?** `apps/web` is owned by a separate ChatGPT/Sites
-> integration that independently pushes to this repo; it contains an unrelated Next.js
-> implementation. See [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md). Don't build there.
+> **Why `apps/atlas` and not `apps/web`?** A separate ChatGPT/Sites integration with push
+> access to this repo used `apps/web` for its own unrelated Next.js implementation. That
+> directory has been removed, but the integration may recreate it — this app deliberately
+> lives elsewhere so the two can not collide. See [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md).
 
 ## Running
 

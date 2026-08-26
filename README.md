@@ -17,15 +17,12 @@ The deployment target is GCP Cloud Run + Neon, not the originally-planned OCI VM
 after OCI's Always Free ARM capacity stayed exhausted across ~40 apply attempts over two days.
 The OCI Terraform is still in the repo but dormant; see `infra/terraform/README.md`.
 
-The OSM/DeFlock importer, the web app, real auth, and the mobile app are not yet built. Note:
-`apps/web` contains an unrelated, independently-maintained implementation pushed by a separate
-ChatGPT/Sites integration connected to this repo — it is not part of this architecture, see
-`docs/ARCHITECTURE.md`.
+The importer, web app, and authentication are done; the mobile app is not yet built.
 
 ## Layout
 
 ```
-apps/web        Unrelated Sites-managed app — not part of this architecture, do not build on it
+apps/atlas      React web app (map, records, submit, review desk)  [done]
 apps/mobile     React Native mobile app                     [not yet built]
 services/api    Go REST API                                 [done]
 services/importer  OSM/DeFlock bootstrap importer            [not yet built]
