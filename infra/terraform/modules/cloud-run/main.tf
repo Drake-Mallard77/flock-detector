@@ -89,7 +89,7 @@ resource "google_cloud_run_v2_service" "api" {
     }
 
     containers {
-      image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.ghcr_mirror.repository_id}/${var.ghcr_owner_repo}:${var.image_tag}"
+      image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.ghcr_mirror.repository_id}/${var.ghcr_owner_repo}@${var.image_digest}"
 
       resources {
         limits = {

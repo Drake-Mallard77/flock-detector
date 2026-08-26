@@ -17,9 +17,17 @@ variable "ghcr_owner_repo" {
   description = "GHCR path after the registry host, e.g. 'drake-mallard77/flock-detector-api'. Combined with the Artifact Registry remote-repository mirror to build the actual pulled image path."
 }
 
-variable "image_tag" {
-  type    = string
-  default = "latest"
+variable "image_digest" {
+  type        = string
+  description = <<-EOT
+    sha256:... digest of the published image, not a floating tag. Deploying
+    by tag (e.g. :latest) doesn't reliably pick up new pushes: Terraform
+    sees the same image string on every apply and skips the update, and
+    even a forced `gcloud run deploy` with the same tag can serve a stale
+    pull from the Artifact Registry remote-repository mirror's own tag
+    cache. Get the current digest with:
+      docker pull ghcr.io/<owner>/<repo>:latest  (prints the digest)
+  EOT
 }
 
 variable "database_url" {

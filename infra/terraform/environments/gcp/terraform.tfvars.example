@@ -5,6 +5,9 @@ project_id      = "your-gcp-project-id"
 region          = "us-central1"
 ghcr_owner_repo = "your-github-username/flock-detector-api"
 
+# docker pull ghcr.io/<owner>/flock-detector-api:latest   (prints this)
+image_digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
 # Neon (neon.tech) connection string — free-tier serverless Postgres with
 # PostGIS support. `neonctl projects create` prints this; the api's own
 # migration runner creates the PostGIS extension on first connect.

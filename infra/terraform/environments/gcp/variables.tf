@@ -13,6 +13,11 @@ variable "ghcr_owner_repo" {
   description = "Path portion of the GHCR image, after the ghcr.io host."
 }
 
+variable "image_digest" {
+  type        = string
+  description = "sha256:... digest of the published image. See modules/cloud-run/variables.tf for why this is a digest, not a tag."
+}
+
 variable "database_url" {
   type      = string
   sensitive = true
