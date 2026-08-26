@@ -1,0 +1,376 @@
+/* Muted, document-like palette — this is a public-records project, and the
+   visual language should read closer to an archive than a consumer app. */
+:root {
+  --bg: #ffffff;
+  --bg-subtle: #f7f7f6;
+  --border: #e2e2df;
+  --text: #1a1a18;
+  --text-muted: #6b6b66;
+  --accent: #2c3e50;
+
+  /* Status colors, also used for map pins — chosen to stay distinguishable
+     in grayscale and for common forms of color blindness. */
+  --status-confirmed: #1b6b4a;
+  --status-contract: #8a6d1f;
+  --status-review: #5a5a70;
+  --status-disputed: #96421f;
+
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+a {
+  color: var(--accent);
+}
+
+.layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.site-header {
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 1.25rem;
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.brand {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.brand small {
+  display: block;
+  font-weight: 400;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.site-nav {
+  display: flex;
+  gap: 1.1rem;
+  margin-left: auto;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.site-nav a {
+  text-decoration: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.site-nav a:hover,
+.site-nav a[aria-current="page"] {
+  color: var(--text);
+}
+
+.site-nav .cta {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.35rem 0.7rem;
+  color: var(--text);
+}
+
+main {
+  flex: 1;
+}
+
+.page {
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 1.75rem 1.25rem 3rem;
+}
+
+.page h1 {
+  font-size: 1.5rem;
+  margin: 0 0 0.35rem;
+  letter-spacing: -0.01em;
+}
+
+.page .lede {
+  color: var(--text-muted);
+  margin: 0 0 1.5rem;
+  max-width: 42rem;
+  line-height: 1.55;
+}
+
+.prose {
+  max-width: 42rem;
+  line-height: 1.65;
+}
+
+.prose h2 {
+  font-size: 1.05rem;
+  margin: 2rem 0 0.5rem;
+}
+
+.prose li {
+  margin-bottom: 0.4rem;
+}
+
+/* Filters */
+.filters {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  align-items: center;
+}
+
+.filters button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.filters button[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.filters input,
+.filters select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+/* Records table */
+.records {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.records th {
+  text-align: left;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.records td {
+  padding: 0.6rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.records tr:hover td {
+  background: var(--bg-subtle);
+}
+
+.records a {
+  text-decoration: none;
+  font-weight: 550;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+/* "?" for unknown values — the prototype's transparency convention:
+   show what we don't know rather than hiding the gap. */
+.unknown {
+  color: var(--text-muted);
+}
+
+.status {
+  display: inline-block;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.status-confirmed { color: var(--status-confirmed); }
+.status-contract_found { color: var(--status-contract); }
+.status-under_review { color: var(--status-review); }
+.status-disputed { color: var(--status-disputed); }
+.status-removed { color: var(--text-muted); }
+
+/* Map */
+.map-wrap {
+  position: relative;
+  height: calc(100vh - 3.6rem);
+  min-height: 24rem;
+}
+
+.map-root {
+  position: absolute;
+  inset: 0;
+}
+
+.map-legend {
+  position: absolute;
+  bottom: 1.5rem;
+  left: 0.75rem;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  max-width: 15rem;
+}
+
+.map-legend h2 {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 0.35rem;
+  color: var(--text-muted);
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.legend-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  flex: none;
+}
+
+.legend-note {
+  margin: 0.5rem 0 0;
+  color: var(--text-muted);
+}
+
+.maplibregl-popup-content {
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 0.7rem 0.85rem;
+}
+
+.maplibregl-popup-content h3 {
+  margin: 0 0 0.3rem;
+  font-size: 0.9rem;
+}
+
+/* Forms */
+.form-field {
+  margin-bottom: 1rem;
+  max-width: 34rem;
+}
+
+.form-field label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 550;
+  margin-bottom: 0.25rem;
+}
+
+.form-field .hint {
+  display: block;
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin-top: 0.15rem;
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea {
+  font: inherit;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+}
+
+.form-field textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+button.primary {
+  font: inherit;
+  font-weight: 550;
+  padding: 0.5rem 1.1rem;
+  border: none;
+  border-radius: 5px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+button.primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.notice {
+  padding: 0.7rem 0.9rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  font-size: 0.88rem;
+  margin-bottom: 1.25rem;
+  max-width: 42rem;
+}
+
+.notice.error {
+  border-color: #e0b4a4;
+  background: #fdf3ef;
+}
+
+.notice.success {
+  border-color: #b3d4c3;
+  background: #f0f8f4;
+}
+
+.state {
+  color: var(--text-muted);
+  padding: 1.5rem 0;
+}
+
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding: 1rem 1.25rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.site-footer a {
+  color: var(--text-muted);
+}

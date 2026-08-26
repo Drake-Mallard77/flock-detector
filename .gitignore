@@ -7,6 +7,7 @@ services/importer/importer
 # Node / web / mobile (populated in later phases)
 node_modules/
 dist/
+*.tsbuildinfo
 .expo/
 .env
 .env.local
