@@ -6,7 +6,8 @@ module "cloud_run" {
   ghcr_owner_repo = var.ghcr_owner_repo
   image_digest    = var.image_digest
   database_url    = var.database_url
-  jwt_secret      = var.jwt_secret
+  jwt_secret       = var.jwt_secret
+  google_client_id = var.google_client_id
 
   # Point CORS at the deployed site rather than a hardcoded value, so the
   # two can't drift apart. Terraform resolves the dependency order; a

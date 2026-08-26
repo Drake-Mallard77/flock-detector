@@ -41,6 +41,12 @@ variable "jwt_secret" {
   sensitive = true
 }
 
+variable "google_client_id" {
+  type        = string
+  default     = ""
+  description = "OAuth client ID the API validates Google ID tokens against (their `aud` claim). Not a secret — it ships in the browser bundle. Empty disables Google sign-in entirely rather than skipping the audience check."
+}
+
 variable "allowed_origin" {
   type    = string
   default = "http://localhost:5173"

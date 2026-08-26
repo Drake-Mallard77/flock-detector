@@ -26,7 +26,11 @@ export default function App() {
             Map
           </NavLink>
           <NavLink to="/deployments">Deployments</NavLink>
-          <NavLink to="/methodology">Methodology</NavLink>
+          {/* Methodology is intentionally not in the top nav — it's
+              reference material, not a primary destination, and it was
+              crowding Map/Deployments. Still linked from the footer and
+              from the record pages that depend on it. */}
+          <NavLink to="/review">Review desk</NavLink>
           <NavLink to="/submit" className="cta">
             + Submit a sighting
           </NavLink>

@@ -43,3 +43,9 @@ variable "jwt_secret" {
 // module.atlas.url so the API's CORS policy can't drift from where the site
 // is actually served. For local development, run the API from
 // infra/docker/docker-compose.yml, which sets it to localhost:5173.
+
+variable "google_client_id" {
+  type        = string
+  default     = ""
+  description = "OAuth client ID for Google sign-in. Public by design; see modules/cloud-run/variables.tf."
+}

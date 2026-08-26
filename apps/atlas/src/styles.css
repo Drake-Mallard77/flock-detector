@@ -417,3 +417,105 @@ button.primary:disabled {
 .site-footer a {
   color: var(--text-muted);
 }
+
+/* Review desk */
+.review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.review-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.review-identity button,
+.review-actions button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.review-actions button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.review-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.review-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
+}
+
+.review-card header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.review-card header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.review-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+  margin: 0 0 0.9rem;
+}
+
+.review-fields dt {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.review-fields dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.9rem;
+}
+
+.review-sources {
+  font-size: 0.88rem;
+  margin-bottom: 0.75rem;
+}
+
+.review-sources ul {
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+  word-break: break-all;
+}
+
+.review-notes {
+  font-size: 0.88rem;
+  margin: 0 0 0.9rem;
+}
+
+.review-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border);
+  padding-top: 0.8rem;
+}

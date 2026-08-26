@@ -25,3 +25,7 @@ database_url = "postgresql://user:password@host/dbname?sslmode=require"
 jwt_secret = "replace-with-32-plus-random-characters"
 
 allowed_origin = "http://localhost:5173" # update once apps/web is deployed (Phase 4)
+
+# OAuth client ID for Google sign-in (Console > APIs & Services > Credentials).
+# Public by design — it ships in the browser bundle. Empty disables sign-in.
+google_client_id = "000000000000-xxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com"
