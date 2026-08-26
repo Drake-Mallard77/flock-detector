@@ -26,13 +26,32 @@ submissions and by the OSM/DeFlock bootstrap import (`source = osm_import`).
 **Roles**: `submitter` (anonymous or logged in; submissions land in `under_review`),
 `moderator` (Review Desk — approve/edit/reject), `admin`.
 
-## Bootstrap data: OSM / DeFlock
+## Bootstrap data: OSM / DeFlock — Phase 3, done
 
-OSM nodes tagged `man_made=surveillance` + `surveillance:type=ALPR` +
-`manufacturer=Flock Safety` are fetched via Overpass QL (`https://overpass-api.de/api/interpreter`),
-scoped per US state. OSM data is **ODbL** — the derived database must stay attributable
-("© OpenStreetMap contributors", shown on the Methodology page); share-alike applies to the
-database itself, not just the rendered map.
+`services/importer` (see its [README](../services/importer/README.md)). OSM nodes tagged
+`man_made=surveillance` + `surveillance:type=ALPR` + `manufacturer=Flock Safety` are fetched
+via Overpass QL (`https://overpass-api.de/api/interpreter`), one US state at a time, and
+upserted into `camera_sightings` keyed on `external_id` (`osm:node:<id>`) so re-runs update
+rather than duplicate.
+
+**Populates only `camera_sightings`, never `deployments`** — a deployments row is a
+public-records claim about a named agency; an OSM node is a crowdsourced pin whose `operator`
+tag is a hint, not evidence. Auto-promoting those would put unverified claims about specific
+police departments into the records-backed part of the site. Moderators can link them by hand.
+
+Imported rows land `status='confirmed'` (user submissions start `under_review`): OSM data has
+already been through OpenStreetMap's community review, and queueing 100k+ pins for moderation
+would bury the submissions that actually need it.
+
+OSM data is **ODbL** — the derived database must stay attributable ("© OpenStreetMap
+contributors", shown on the Methodology page); share-alike applies to the database itself, not
+just the rendered map. **This attribution is not yet built into any UI** — it must ship with
+the Phase 4 web app.
+
+Real scale, measured: DC ~86 cameras, California ~14,900; a full US import is 100k+ rows.
+The public Overpass instance rate-limits aggressively (429 on back-to-back large-state queries
+even at 5s spacing), so the client retries with exponential backoff and defaults to a 15s
+inter-state delay.
 
 ## Services
 
@@ -43,7 +62,7 @@ flock-detector/
     mobile/         React Native (Expo) — Android-first rollout            [Phase 6]
   services/
     api/            Go backend (chi router), REST JSON API                 [Phase 1 — done]
-    importer/       Overpass fetch + ODbL attribution + seed/refresh job   [Phase 3]
+    importer/       Overpass fetch -> camera_sightings upsert (ODbL)      [Phase 3 — done]
   packages/
     shared-types/   OpenAPI schema -> generated TS types, web+mobile       [Phase 4]
   infra/
@@ -150,7 +169,9 @@ startup). See `services/api/README.md` for endpoint details and a dev-login exam
 2. **Terraform + GHCR image publish + first real deploy — done, on GCP Cloud Run + Neon**
    (pivoted from OCI after ~40 failed applies against Always Free ARM capacity — see above).
    Live at `https://flockwatch-api-wlfs54kbla-uc.a.run.app`.
-3. OSM/DeFlock importer.
+3. **OSM/DeFlock importer — done** (`services/importer`). Verified end-to-end against the real
+   Overpass API and a local Postgres: 86 DC cameras imported, re-run confirmed idempotent.
+   Not yet run against the live Neon database.
 4. Web app (map, deployments list/detail, methodology, submission form).
 5. Real auth (replacing the dev-login stub) + Review Desk moderation UI.
 6. React Native mobile app (Android-first).

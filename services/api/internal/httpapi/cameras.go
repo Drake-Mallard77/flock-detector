@@ -28,7 +28,8 @@ func (s *Server) handleListCameras(w http.ResponseWriter, r *http.Request) {
 
 	sql := `
 		SELECT id, deployment_id, ST_Y(location::geometry), ST_X(location::geometry),
-		       direction, camera_type, photo_url, source, status, created_by, created_at
+		       direction, camera_type, photo_url, source, status, external_id, state,
+		       created_by, created_at
 		FROM camera_sightings
 		WHERE (
 			NOT $1 OR location && ST_MakeEnvelope($2, $3, $4, $5, 4326)::geography
@@ -49,6 +50,7 @@ func (s *Server) handleListCameras(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(
 			&c.ID, &c.DeploymentID, &c.Lat, &c.Lng,
 			&c.Direction, &c.CameraType, &c.PhotoURL, &c.Source, &c.Status,
+			&c.ExternalID, &c.State,
 			&c.CreatedBy, &c.CreatedAt,
 		); err != nil {
 			writeError(w, http.StatusInternalServerError, "scan failed")

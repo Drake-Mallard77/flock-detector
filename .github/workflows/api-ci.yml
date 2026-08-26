@@ -9,13 +9,17 @@ on:
 permissions:
   contents: read
 
-defaults:
-  run:
-    working-directory: services/api
-
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Two independent Go modules, same checks against each.
+        module: [services/api, services/importer]
+    defaults:
+      run:
+        working-directory: ${{ matrix.module }}
     steps:
       # Actions are pinned to a commit SHA, not a floating tag (e.g. @v4) —
       # a compromised tag on a widely-used action is a real supply-chain
@@ -24,8 +28,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: services/api/go.mod
-          cache-dependency-path: services/api/go.sum
+          go-version-file: ${{ matrix.module }}/go.mod
+          cache-dependency-path: ${{ matrix.module }}/go.sum
 
       - name: go build
         run: go build ./...
@@ -40,8 +44,8 @@ jobs:
             exit 1
           fi
       # Runs the full suite, including the testcontainers-go integration
-      # tests in internal/httpapi — GitHub-hosted ubuntu runners have Docker
-      # available by default, no extra setup needed.
+      # tests in services/api's internal/httpapi — GitHub-hosted ubuntu
+      # runners have Docker available by default, no extra setup needed.
       - name: go test
         run: go test ./... -v
 

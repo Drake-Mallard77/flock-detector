@@ -99,6 +99,8 @@ type CameraSighting struct {
 	PhotoURL     *string   `json:"photo_url,omitempty"`
 	Source       string    `json:"source"`
 	Status       string    `json:"status"`
+	ExternalID   *string   `json:"external_id,omitempty"`
+	State        *string   `json:"state,omitempty"`
 	CreatedBy    *string   `json:"created_by,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 }

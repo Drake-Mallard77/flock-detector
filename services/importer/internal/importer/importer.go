@@ -1,0 +1,93 @@
+// Package importer upserts OSM-sourced ALPR camera nodes into
+// camera_sightings.
+//
+// Scope note: this deliberately populates ONLY the camera_sightings
+// (precise-pin) layer, never deployments. A deployments row is a
+// public-records claim about a named agency — backed by a council report,
+// contract, FOIA response, etc. An OSM node is a crowdsourced map pin; its
+// `operator` tag is a hint, not evidence, and auto-promoting those into
+// agency-level records would put unverified claims about specific police
+// departments into the part of the site that presents itself as
+// records-backed. A moderator can link OSM cameras to a deployment by hand.
+package importer
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"flockwatch/importer/internal/overpass"
+)
+
+type Stats struct {
+	Fetched  int
+	Inserted int
+	Updated  int
+	Skipped  int
+}
+
+// UpsertNodes writes nodes for one state. Idempotent: re-running an import
+// updates existing rows (matched on external_id) rather than duplicating
+// them, so the job can be re-run on a schedule to pick up new OSM edits.
+//
+// Imported rows land as status='confirmed', unlike user submissions which
+// start 'under_review': OSM data has already been through OpenStreetMap's
+// own community review, and holding 100k+ imported pins in a moderation
+// queue would bury the genuinely-needs-review user submissions.
+func UpsertNodes(ctx context.Context, pool *pgxpool.Pool, state string, nodes []overpass.Node) (Stats, error) {
+	stats := Stats{Fetched: len(nodes)}
+
+	for _, n := range nodes {
+		if n.Lat == 0 && n.Lon == 0 {
+			stats.Skipped++
+			continue
+		}
+
+		externalID := "osm:node:" + strconv.FormatInt(n.ID, 10)
+
+		var direction *int
+		if d, ok := n.Tags["direction"]; ok {
+			if v, err := strconv.Atoi(d); err == nil && v >= 0 && v <= 359 {
+				direction = &v
+			}
+		}
+
+		var cameraType *string
+		// `camera:type` is the OSM tag for the physical camera style
+		// (fixed/panning/dome); Flock's product line isn't in OSM tags, so
+		// this is the closest available signal.
+		if ct, ok := n.Tags["camera:type"]; ok && ct != "" {
+			cameraType = &ct
+		}
+
+		var inserted bool
+		err := pool.QueryRow(ctx, `
+			INSERT INTO camera_sightings (
+				location, direction, camera_type, source, status, external_id, state
+			) VALUES (
+				ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
+				$3, $4, 'osm_import', 'confirmed', $5, $6
+			)
+			ON CONFLICT (external_id) WHERE external_id IS NOT NULL
+			DO UPDATE SET
+				location    = EXCLUDED.location,
+				direction   = EXCLUDED.direction,
+				camera_type = EXCLUDED.camera_type,
+				state       = EXCLUDED.state
+			RETURNING (xmax = 0) AS inserted
+		`, n.Lon, n.Lat, direction, cameraType, externalID, state).Scan(&inserted)
+		if err != nil {
+			return stats, fmt.Errorf("upsert node %d: %w", n.ID, err)
+		}
+
+		if inserted {
+			stats.Inserted++
+		} else {
+			stats.Updated++
+		}
+	}
+
+	return stats, nil
+}
