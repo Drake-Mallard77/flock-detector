@@ -85,10 +85,23 @@ export class ApiError extends Error {
   }
 }
 
+// Held in memory only. The provider in auth.tsx is responsible for
+// persisting it; keeping the module's copy in memory means a stale token in
+// storage can't silently outlive an explicit sign-out in this tab.
+let authToken: string | null = null;
+
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...init?.headers,
+    },
   });
 
   if (!res.ok) {
@@ -133,6 +146,30 @@ export function createDeployment(body: NewDeployment) {
   return request<{ id: string; status: string }>("/deployments", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+export interface Me {
+  user_id: string;
+  email: string;
+  role: "submitter" | "moderator" | "admin";
+}
+
+export function googleLogin(credential: string) {
+  return request<{ token: string; email: string; role: string }>("/auth/google", {
+    method: "POST",
+    body: JSON.stringify({ credential }),
+  });
+}
+
+export function getMe() {
+  return request<Me>("/auth/me");
+}
+
+export function reviewDeployment(id: string, status: DeploymentStatus) {
+  return request<{ id: string; status: string }>(`/deployments/${id}/review`, {
+    method: "POST",
+    body: JSON.stringify({ status }),
   });
 }
 

@@ -5,6 +5,7 @@ import DeploymentDetailPage from "./pages/DeploymentDetailPage";
 import DeploymentsPage from "./pages/DeploymentsPage";
 import MethodologyPage from "./pages/MethodologyPage";
 import NotFoundPage from "./pages/NotFoundPage";
+import ReviewDeskPage from "./pages/ReviewDeskPage";
 import SubmitPage from "./pages/SubmitPage";
 
 // MapLibre is ~1MB of the bundle on its own. Lazy-loading it keeps the
@@ -46,6 +47,10 @@ export default function App() {
           <Route path="/deployments/:id" element={<DeploymentDetailPage />} />
           <Route path="/methodology" element={<MethodologyPage />} />
           <Route path="/submit" element={<SubmitPage />} />
+          {/* Not route-guarded: the page renders sign-in or an access
+              notice itself, and the API rejects unauthorized actions
+              regardless. Hiding the route would only obscure it. */}
+          <Route path="/review" element={<ReviewDeskPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>

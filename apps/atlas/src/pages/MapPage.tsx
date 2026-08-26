@@ -9,23 +9,28 @@ import {
   type ManufacturerCount,
 } from "../lib/api";
 
-// CARTO's Positron basemap, NOT tile.openstreetmap.org. OSM's tile servers
-// actively block application traffic under their tile usage policy
-// (https://operations.osmfoundation.org/policies/tiles/) — they return
-// HTTP 200 with an `x-blocked: Access denied` header and a placeholder
-// image, so the map looks silently broken rather than erroring. CARTO
-// permits this use and its muted palette suits a records project.
-// The underlying data is still OSM-derived, hence both attributions.
+// Same-origin in production (Caddy proxies it). The Vite dev server has no
+// such proxy, so local development falls back to the deployed site's tile
+// path via VITE_TILE_BASE, or the CDN directly.
+const TILE_BASE = import.meta.env.VITE_TILE_BASE ?? "/tiles";
+
+// Tiles come from this site's own origin (/tiles/*), which Caddy proxies to
+// CARTO's Positron basemap — see apps/atlas/Caddyfile.
+//
+// Two earlier attempts failed silently, which is why this is worth spelling
+// out. tile.openstreetmap.org blocks application traffic under OSM's tile
+// usage policy (HTTP 200 plus an `x-blocked` header and a placeholder
+// image). Pointing straight at basemaps.cartocdn.com then worked in a plain
+// browser but was blocked as a third-party CDN by privacy browsers like
+// DuckDuckGo — the exact audience a surveillance-transparency site attracts.
+// Serving first-party fixes both, and means the tile host never learns who
+// is looking at which area.
 const STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
     basemap: {
       type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-      ],
+      tiles: [`${TILE_BASE}/light_all/{z}/{x}/{y}.png`],
       tileSize: 256,
       attribution:
         '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',

@@ -5,5 +5,14 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    proxy: {
+      // Mirrors the Caddy tile proxy in production (see Caddyfile) so the
+      // map behaves the same locally and deployed.
+      "/tiles": {
+        target: "https://basemaps.cartocdn.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/tiles/, ""),
+      },
+    },
   },
 });

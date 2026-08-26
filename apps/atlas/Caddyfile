@@ -15,8 +15,11 @@
 	# deliberate: the shell is served for "/" and every SPA route via
 	# try_files, so a literal /index.html matcher misses almost every real
 	# request for it.
+	# /tiles/* is excluded here and sets its own cache policy in its handler
+	# below — without that exclusion the shell's no-cache would apply to
+	# every map tile and defeat tile caching entirely.
 	@hashed path /assets/*
-	@shell not path /assets/*
+	@shell not path /assets/* /tiles/*
 	header @hashed Cache-Control "public, max-age=31536000, immutable"
 	header @shell Cache-Control "no-cache"
 
@@ -30,8 +33,35 @@
 		-Server
 	}
 
+	# Map tiles are proxied through this origin rather than loaded directly
+	# from the CDN. Two reasons, both real:
+	#
+	#  1. Privacy-focused browsers and extensions (DuckDuckGo, uBlock, etc.)
+	#     block third-party CDN requests, which silently left the map blank.
+	#     This site's audience is disproportionately those users.
+	#  2. A surveillance-transparency site shouldn't leak its visitors'
+	#     browsing to a third-party CDN in the first place — first-party
+	#     tiles mean the tile host never sees who is looking at what.
+	handle_path /tiles/* {
+		reverse_proxy https://basemaps.cartocdn.com {
+			header_up Host basemaps.cartocdn.com
+			# Don't forward the visitor's identifying headers upstream.
+			header_up -Referer
+			header_up -Cookie
+			header_up -X-Forwarded-For
+		}
+		header Cache-Control "public, max-age=86400"
+	}
+
 	# SPA history routing: react-router owns /deployments/:id etc., so any
 	# unmatched path must fall through to index.html rather than 404.
-	try_files {path} /index.html
-	file_server
+	#
+	# Wrapped in `handle` so it's mutually exclusive with the tile proxy
+	# above. Bare `try_files` belongs to Caddy's rewrite phase, which runs
+	# *before* `handle_path` — so tile requests were being rewritten to
+	# /index.html and served the HTML shell instead of an image.
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
 }
