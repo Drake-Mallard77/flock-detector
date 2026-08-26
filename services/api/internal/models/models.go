@@ -96,6 +96,7 @@ type CameraSighting struct {
 	Lng          float64   `json:"lng"`
 	Direction    *int      `json:"direction,omitempty"`
 	CameraType   *string   `json:"camera_type,omitempty"`
+	Manufacturer *string   `json:"manufacturer,omitempty"`
 	PhotoURL     *string   `json:"photo_url,omitempty"`
 	Source       string    `json:"source"`
 	Status       string    `json:"status"`

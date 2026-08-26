@@ -26,6 +26,28 @@ func (s *Server) handleListCameras(w http.ResponseWriter, r *http.Request) {
 		hasBBox = true
 	}
 
+	// Optional filters. Empty string means "no filter" for each, so a plain
+	// /cameras call still returns everything.
+	source := q.Get("source")
+	if source != "" && source != "osm_import" && source != "user_submission" {
+		writeError(w, http.StatusBadRequest, "invalid source, must be osm_import or user_submission")
+		return
+	}
+
+	status := q.Get("status")
+	if status != "" && status != "confirmed" && status != "under_review" && status != "removed" {
+		writeError(w, http.StatusBadRequest, "invalid status, must be confirmed, under_review, or removed")
+		return
+	}
+
+	// manufacturer=unknown selects rows where OSM didn't record one, which
+	// can't be expressed as a plain equality match.
+	manufacturer := q.Get("manufacturer")
+	manufacturerUnknown := manufacturer == "unknown"
+	if manufacturerUnknown {
+		manufacturer = ""
+	}
+
 	// The bbox comparison runs in geometry space (location::geometry),
 	// NOT geography. Casting the envelope to geography makes PostGIS
 	// interpret a box wider than 180° as wrapping the *short* way around
@@ -35,16 +57,21 @@ func (s *Server) handleListCameras(w http.ResponseWriter, r *http.Request) {
 	// comparison is both correct and what the GiST index supports.
 	sql := `
 		SELECT id, deployment_id, ST_Y(location::geometry), ST_X(location::geometry),
-		       direction, camera_type, photo_url, source, status, external_id, state,
-		       created_by, created_at
+		       direction, camera_type, manufacturer, photo_url, source, status,
+		       external_id, state, created_by, created_at
 		FROM camera_sightings
 		WHERE (
 			NOT $1 OR location::geometry && ST_MakeEnvelope($2, $3, $4, $5, 4326)
 		)
+		  AND ($6 = '' OR source = $6)
+		  AND ($7 = '' OR status = $7)
+		  AND ($8 = '' OR manufacturer = $8)
+		  AND (NOT $9 OR manufacturer IS NULL)
 		ORDER BY created_at DESC
 		LIMIT 1000
 	`
-	rows, err := s.db.Query(r.Context(), sql, hasBBox, west, south, east, north)
+	rows, err := s.db.Query(r.Context(), sql, hasBBox, west, south, east, north,
+		source, status, manufacturer, manufacturerUnknown)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "query failed")
 		return
@@ -56,7 +83,7 @@ func (s *Server) handleListCameras(w http.ResponseWriter, r *http.Request) {
 		var c models.CameraSighting
 		if err := rows.Scan(
 			&c.ID, &c.DeploymentID, &c.Lat, &c.Lng,
-			&c.Direction, &c.CameraType, &c.PhotoURL, &c.Source, &c.Status,
+			&c.Direction, &c.CameraType, &c.Manufacturer, &c.PhotoURL, &c.Source, &c.Status,
 			&c.ExternalID, &c.State,
 			&c.CreatedBy, &c.CreatedAt,
 		); err != nil {

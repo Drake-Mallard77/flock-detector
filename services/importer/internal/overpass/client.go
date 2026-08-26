@@ -51,14 +51,19 @@ type response struct {
 // this as a permanent failure for that state.
 var ErrRateLimited = errors.New("overpass rate limited")
 
-// FlockALPRNodesInState queries every node tagged as a Flock Safety ALPR
-// camera within the given two-letter US state code (e.g. "CA"). admin_level
-// 4 scopes the area match to the state boundary itself, not same-named
+// ALPRNodesInState queries every node tagged as an ALPR surveillance camera
+// within the given two-letter US state code (e.g. "CA"). admin_level 4
+// scopes the area match to the state boundary itself, not same-named
 // sub-areas.
+//
+// Deliberately NOT filtered to manufacturer="Flock Safety": measured against
+// OSM, that missed ~10% of documented ALPR cameras (DC had 86 Flock out of
+// 95 total, the rest Motorola Solutions/Genetec/Leonardo). The manufacturer
+// tag is carried through instead so readers can filter to Flock themselves.
 //
 // Retries with exponential backoff on rate limiting; returns ErrRateLimited
 // if it's still being throttled after maxAttempts.
-func (c *Client) FlockALPRNodesInState(ctx context.Context, stateCode string) ([]Node, error) {
+func (c *Client) ALPRNodesInState(ctx context.Context, stateCode string) ([]Node, error) {
 	const maxAttempts = 4
 	backoff := 30 * time.Second
 
@@ -86,8 +91,7 @@ func (c *Client) fetchOnce(ctx context.Context, stateCode string) ([]Node, error
 		area["ISO3166-2"="US-%s"]["admin_level"="4"]->.a;
 		node(area.a)
 			["man_made"="surveillance"]
-			["surveillance:type"="ALPR"]
-			["manufacturer"="Flock Safety"];
+			["surveillance:type"="ALPR"];
 		out body;
 	`, stateCode)
 

@@ -47,12 +47,21 @@ export interface CameraSighting {
   lng: number;
   direction?: number;
   camera_type?: string;
+  /** Absent when OpenStreetMap didn't record one. */
+  manufacturer?: string;
   photo_url?: string;
   source: "user_submission" | "osm_import";
   status: string;
   external_id?: string;
   state?: string;
   created_at: string;
+}
+
+export interface CameraFilters {
+  source?: "osm_import" | "user_submission";
+  status?: "confirmed" | "under_review";
+  /** A manufacturer name, or the literal "unknown" for rows OSM left blank. */
+  manufacturer?: string;
 }
 
 export interface NewDeployment {
@@ -128,7 +137,15 @@ export function createDeployment(body: NewDeployment) {
 }
 
 /** bbox is [west, south, east, north]. */
-export function listCameras(bbox?: [number, number, number, number]) {
-  const qs = bbox ? `?bbox=${bbox.join(",")}` : "";
-  return request<CameraSighting[]>(`/cameras${qs}`);
+export function listCameras(
+  bbox?: [number, number, number, number],
+  filters: CameraFilters = {},
+) {
+  const params = new URLSearchParams();
+  if (bbox) params.set("bbox", bbox.join(","));
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) params.set(key, value);
+  }
+  const qs = params.toString();
+  return request<CameraSighting[]>(`/cameras${qs ? `?${qs}` : ""}`);
 }

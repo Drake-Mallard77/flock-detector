@@ -56,28 +56,38 @@ func UpsertNodes(ctx context.Context, pool *pgxpool.Pool, state string, nodes []
 
 		var cameraType *string
 		// `camera:type` is the OSM tag for the physical camera style
-		// (fixed/panning/dome); Flock's product line isn't in OSM tags, so
+		// (fixed/panning/dome); vendor product lines aren't in OSM tags, so
 		// this is the closest available signal.
 		if ct, ok := n.Tags["camera:type"]; ok && ct != "" {
 			cameraType = &ct
 		}
 
+		// Left NULL when OSM doesn't say, rather than guessed — an unknown
+		// manufacturer is surfaced as unknown, matching how the rest of the
+		// atlas treats gaps.
+		var manufacturer *string
+		if mf, ok := n.Tags["manufacturer"]; ok && mf != "" {
+			manufacturer = &mf
+		}
+
 		var inserted bool
 		err := pool.QueryRow(ctx, `
 			INSERT INTO camera_sightings (
-				location, direction, camera_type, source, status, external_id, state
+				location, direction, camera_type, manufacturer,
+				source, status, external_id, state
 			) VALUES (
 				ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
-				$3, $4, 'osm_import', 'confirmed', $5, $6
+				$3, $4, $5, 'osm_import', 'confirmed', $6, $7
 			)
 			ON CONFLICT (external_id) WHERE external_id IS NOT NULL
 			DO UPDATE SET
-				location    = EXCLUDED.location,
-				direction   = EXCLUDED.direction,
-				camera_type = EXCLUDED.camera_type,
-				state       = EXCLUDED.state
+				location     = EXCLUDED.location,
+				direction    = EXCLUDED.direction,
+				camera_type  = EXCLUDED.camera_type,
+				manufacturer = EXCLUDED.manufacturer,
+				state        = EXCLUDED.state
 			RETURNING (xmax = 0) AS inserted
-		`, n.Lon, n.Lat, direction, cameraType, externalID, state).Scan(&inserted)
+		`, n.Lon, n.Lat, direction, cameraType, manufacturer, externalID, state).Scan(&inserted)
 		if err != nil {
 			return stats, fmt.Errorf("upsert node %d: %w", n.ID, err)
 		}

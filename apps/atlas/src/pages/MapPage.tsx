@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 
-import { listCameras, type CameraSighting } from "../lib/api";
+import { listCameras, type CameraFilters, type CameraSighting } from "../lib/api";
 
 // CARTO's Positron basemap, NOT tile.openstreetmap.org. OSM's tile servers
 // actively block application traffic under their tile usage policy
@@ -54,6 +54,27 @@ function clampBBox(b: maplibregl.LngLatBounds): [number, number, number, number]
 // response hits exactly this, results were almost certainly truncated.
 const API_LIMIT = 1000;
 
+// The ALPR manufacturers OSM actually records in the US, most common first.
+// Kept a static list rather than deriving it from the loaded viewport —
+// options shouldn't appear and disappear as the user pans.
+const MANUFACTURERS = ["Flock Safety", "Motorola Solutions", "Genetec", "Leonardo"];
+
+/**
+ * Escapes text before it goes into a MapLibre popup.
+ *
+ * Popup content is built as an HTML string, and these values originate from
+ * OpenStreetMap tags (editable by anyone) and public submissions — i.e.
+ * untrusted input. Interpolating them raw would be a stored-XSS vector.
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export default function MapPage() {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -61,6 +82,13 @@ export default function MapPage() {
   const [count, setCount] = useState<number | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<CameraFilters>({});
+
+  // loadCameras runs from map event handlers that are registered once, so
+  // reading `filters` directly there would capture the initial value. A ref
+  // keeps those handlers looking at current state.
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
 
   useEffect(() => {
     if (!container.current || map.current) return;
@@ -153,14 +181,14 @@ export default function MapPage() {
         new maplibregl.Popup({ closeButton: true })
           .setLngLat([lng, lat])
           .setHTML(
-            `<h3>ALPR camera</h3>
-             <div>${p.camera_type ? String(p.camera_type) : "Type unknown"}${
+            `<h3>${escapeHtml(p.manufacturer ? String(p.manufacturer) : "ALPR camera")}</h3>
+             <div>${p.camera_type ? escapeHtml(String(p.camera_type)) : "Type not recorded"}${
                p.direction !== undefined && p.direction !== null
-                 ? ` · facing ${String(p.direction)}°`
+                 ? ` · facing ${Number(p.direction)}°`
                  : ""
              }</div>
-             <div style="color:#6b6b66;margin-top:.3rem">
-               ${p.source === "osm_import" ? "Source: OpenStreetMap" : "Source: user submission"}
+             <div class="popup-source">
+               ${p.source === "osm_import" ? "Source: OpenStreetMap" : "Source: community report"}
              </div>`,
           )
           .addTo(m);
@@ -190,11 +218,18 @@ export default function MapPage() {
     };
   }, []);
 
+  // Refetch when a filter changes (the map-event path only fires on pan/zoom).
+  useEffect(() => {
+    const m = map.current;
+    if (m?.isStyleLoaded()) void loadCameras(m);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
+
   async function loadCameras(m: maplibregl.Map) {
     const bbox = clampBBox(m.getBounds());
 
     try {
-      const cameras: CameraSighting[] = await listCameras(bbox);
+      const cameras: CameraSighting[] = await listCameras(bbox, filtersRef.current);
       const source = m.getSource("cameras") as maplibregl.GeoJSONSource | undefined;
       if (!source) return;
       source.setData({
@@ -205,6 +240,7 @@ export default function MapPage() {
           properties: {
             id: c.id,
             camera_type: c.camera_type ?? null,
+            manufacturer: c.manufacturer ?? null,
             direction: c.direction ?? null,
             source: c.source,
           },
@@ -218,9 +254,61 @@ export default function MapPage() {
     }
   }
 
+  function setFilter(key: keyof CameraFilters, value: string) {
+    setFilters((prev) => {
+      const next = { ...prev };
+      if (!value) delete next[key];
+      else next[key] = value as never;
+      return next;
+    });
+  }
+
   return (
     <div className="map-wrap">
       <div className="map-root" ref={container} />
+
+      <div className="map-filters">
+        <label>
+          <span>Source</span>
+          <select
+            value={filters.source ?? ""}
+            onChange={(e) => setFilter("source", e.target.value)}
+          >
+            <option value="">All sources</option>
+            <option value="osm_import">OpenStreetMap</option>
+            <option value="user_submission">Community reports</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Review status</span>
+          <select
+            value={filters.status ?? ""}
+            onChange={(e) => setFilter("status", e.target.value)}
+          >
+            <option value="">Any status</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="under_review">Under review</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Manufacturer</span>
+          <select
+            value={filters.manufacturer ?? ""}
+            onChange={(e) => setFilter("manufacturer", e.target.value)}
+          >
+            <option value="">Any manufacturer</option>
+            {MANUFACTURERS.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+            <option value="unknown">Not recorded</option>
+          </select>
+        </label>
+      </div>
+
       <div className="map-legend">
         <h2>Camera locations</h2>
         <div className="legend-row">

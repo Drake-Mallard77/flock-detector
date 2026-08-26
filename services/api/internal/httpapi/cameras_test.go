@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -70,6 +71,82 @@ func TestListCameras_WideBBoxStillMatches(t *testing.T) {
 		json.Unmarshal(rec.Body.Bytes(), &cams)
 		if len(cams) != 1 {
 			t.Errorf("bbox=%s: expected the camera to be found, got %d", bbox, len(cams))
+		}
+	}
+}
+
+func TestListCameras_Filters(t *testing.T) {
+	s := newTestServer(t)
+	h := s.Router()
+
+	// A user submission (source=user_submission, status=under_review, no
+	// manufacturer) via the public endpoint...
+	createCamera(t, h, 39.799, -89.644)
+
+	// ...and two OSM-style rows inserted directly, since the public POST
+	// endpoint deliberately can't set source/status/manufacturer.
+	for _, m := range []struct {
+		ext          string
+		manufacturer any
+	}{
+		{"osm:node:1", "Flock Safety"},
+		{"osm:node:2", nil}, // manufacturer unrecorded in OSM
+	} {
+		_, err := testPool.Exec(context.Background(), `
+			INSERT INTO camera_sightings (location, source, status, external_id, manufacturer)
+			VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
+			        'osm_import', 'confirmed', $3, $4)
+		`, -89.65, 39.80, m.ext, m.manufacturer)
+		if err != nil {
+			t.Fatalf("seed %s: %v", m.ext, err)
+		}
+	}
+
+	count := func(query string) int {
+		t.Helper()
+		rec := doJSON(t, h, http.MethodGet, "/cameras"+query, nil, "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: expected 200, got %d: %s", query, rec.Code, rec.Body.String())
+		}
+		var cams []models.CameraSighting
+		json.Unmarshal(rec.Body.Bytes(), &cams)
+		return len(cams)
+	}
+
+	if got := count(""); got != 3 {
+		t.Errorf("no filter: expected 3, got %d", got)
+	}
+	if got := count("?source=osm_import"); got != 2 {
+		t.Errorf("source=osm_import: expected 2, got %d", got)
+	}
+	if got := count("?source=user_submission"); got != 1 {
+		t.Errorf("source=user_submission: expected 1, got %d", got)
+	}
+	if got := count("?status=confirmed"); got != 2 {
+		t.Errorf("status=confirmed: expected 2, got %d", got)
+	}
+	if got := count("?manufacturer=Flock+Safety"); got != 1 {
+		t.Errorf("manufacturer=Flock Safety: expected 1, got %d", got)
+	}
+	// "unknown" is a distinct concept from any specific manufacturer: it
+	// means OSM recorded none, which an equality match can't express.
+	if got := count("?manufacturer=unknown"); got != 2 {
+		t.Errorf("manufacturer=unknown: expected 2 (the OSM row with no manufacturer + the user submission), got %d", got)
+	}
+	// Filters compose.
+	if got := count("?source=osm_import&manufacturer=unknown"); got != 1 {
+		t.Errorf("source+manufacturer: expected 1, got %d", got)
+	}
+}
+
+func TestListCameras_InvalidFilters(t *testing.T) {
+	s := newTestServer(t)
+	h := s.Router()
+
+	for _, q := range []string{"?source=bogus", "?status=bogus"} {
+		rec := doJSON(t, h, http.MethodGet, "/cameras"+q, nil, "")
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d", q, rec.Code)
 		}
 	}
 }

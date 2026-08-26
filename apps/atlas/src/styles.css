@@ -274,6 +274,49 @@ main {
   color: var(--text-muted);
 }
 
+.map-filters {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.7rem;
+  display: flex;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  max-width: calc(100% - 1.5rem);
+}
+
+.map-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.map-filters label span {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.map-filters select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+}
+
+.popup-source {
+  color: var(--text-muted);
+  margin-top: 0.3rem;
+}
+
 .maplibregl-popup-content {
   font-family: inherit;
   font-size: 0.85rem;

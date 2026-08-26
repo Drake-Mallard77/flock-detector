@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestFlockALPRNodesInState_ParsesNodes(t *testing.T) {
+func TestALPRNodesInState_ParsesNodes(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"elements":[
 			{"id":123,"lat":38.9,"lon":-77.0,"tags":{"direction":"315","camera:type":"fixed"}}
@@ -18,7 +18,7 @@ func TestFlockALPRNodesInState_ParsesNodes(t *testing.T) {
 	defer srv.Close()
 
 	c := &Client{Endpoint: srv.URL, HTTPClient: srv.Client()}
-	nodes, err := c.FlockALPRNodesInState(context.Background(), "DC")
+	nodes, err := c.ALPRNodesInState(context.Background(), "DC")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -33,7 +33,7 @@ func TestFlockALPRNodesInState_ParsesNodes(t *testing.T) {
 	}
 }
 
-func TestFlockALPRNodesInState_SendsQueryAndUserAgent(t *testing.T) {
+func TestALPRNodesInState_SendsQueryAndUserAgent(t *testing.T) {
 	var gotUA string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotUA = r.Header.Get("User-Agent")
@@ -42,7 +42,7 @@ func TestFlockALPRNodesInState_SendsQueryAndUserAgent(t *testing.T) {
 	defer srv.Close()
 
 	c := &Client{Endpoint: srv.URL, HTTPClient: srv.Client()}
-	if _, err := c.FlockALPRNodesInState(context.Background(), "DC"); err != nil {
+	if _, err := c.ALPRNodesInState(context.Background(), "DC"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// Overpass's usage policy asks clients to identify themselves; dropping
@@ -52,7 +52,7 @@ func TestFlockALPRNodesInState_SendsQueryAndUserAgent(t *testing.T) {
 	}
 }
 
-func TestFlockALPRNodesInState_RetriesOnRateLimit(t *testing.T) {
+func TestALPRNodesInState_RetriesOnRateLimit(t *testing.T) {
 	var attempts int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++
@@ -70,7 +70,7 @@ func TestFlockALPRNodesInState_RetriesOnRateLimit(t *testing.T) {
 	defer cancel()
 
 	c := &Client{Endpoint: srv.URL, HTTPClient: srv.Client()}
-	nodes, err := c.FlockALPRNodesInState(ctx, "DC")
+	nodes, err := c.ALPRNodesInState(ctx, "DC")
 	if err != nil {
 		t.Fatalf("expected retry to succeed, got: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestFlockALPRNodesInState_RetriesOnRateLimit(t *testing.T) {
 	}
 }
 
-func TestFlockALPRNodesInState_GivesUpAfterMaxAttempts(t *testing.T) {
+func TestALPRNodesInState_GivesUpAfterMaxAttempts(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
@@ -94,7 +94,7 @@ func TestFlockALPRNodesInState_GivesUpAfterMaxAttempts(t *testing.T) {
 	defer cancel()
 
 	c := &Client{Endpoint: srv.URL, HTTPClient: srv.Client()}
-	_, err := c.FlockALPRNodesInState(ctx, "DC")
+	_, err := c.ALPRNodesInState(ctx, "DC")
 	if err == nil {
 		t.Fatal("expected an error when persistently rate limited")
 	}
@@ -103,7 +103,7 @@ func TestFlockALPRNodesInState_GivesUpAfterMaxAttempts(t *testing.T) {
 	}
 }
 
-func TestFlockALPRNodesInState_NonRetryableError(t *testing.T) {
+func TestALPRNodesInState_NonRetryableError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("bad query"))
@@ -111,7 +111,7 @@ func TestFlockALPRNodesInState_NonRetryableError(t *testing.T) {
 	defer srv.Close()
 
 	c := &Client{Endpoint: srv.URL, HTTPClient: srv.Client()}
-	_, err := c.FlockALPRNodesInState(context.Background(), "DC")
+	_, err := c.ALPRNodesInState(context.Background(), "DC")
 	if err == nil {
 		t.Fatal("expected an error on HTTP 400")
 	}

@@ -91,7 +91,7 @@ func main() {
 			}
 		}
 
-		nodes, err := client.FlockALPRNodesInState(ctx, state)
+		nodes, err := client.ALPRNodesInState(ctx, state)
 		if err != nil {
 			// One state failing (timeout, rate limit) shouldn't abort the
 			// whole run — log it and keep going; the next run picks it up.
