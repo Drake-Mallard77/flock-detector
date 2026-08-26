@@ -9,7 +9,7 @@ export default defineConfig({
       // Mirrors the Caddy tile proxy in production (see Caddyfile) so the
       // map behaves the same locally and deployed.
       "/tiles": {
-        target: "https://basemaps.cartocdn.com",
+        target: "https://tiles.openfreemap.org",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/tiles/, ""),
       },

@@ -15,30 +15,34 @@ import {
 // path via VITE_TILE_BASE, or the CDN directly.
 const TILE_BASE = import.meta.env.VITE_TILE_BASE ?? "/tiles";
 
-// Tiles come from this site's own origin (/tiles/*), which Caddy proxies to
-// CARTO's Positron basemap — see apps/atlas/Caddyfile.
-//
-// Two earlier attempts failed silently, which is why this is worth spelling
-// out. tile.openstreetmap.org blocks application traffic under OSM's tile
-// usage policy (HTTP 200 plus an `x-blocked` header and a placeholder
-// image). Pointing straight at basemaps.cartocdn.com then worked in a plain
-// browser but was blocked as a third-party CDN by privacy browsers like
-// DuckDuckGo — the exact audience a surveillance-transparency site attracts.
-// Serving first-party fixes both, and means the tile host never learns who
-// is looking at which area.
-const STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {
-    basemap: {
-      type: "raster",
-      tiles: [`${TILE_BASE}/light_all/{z}/{x}/{y}.png`],
-      tileSize: 256,
-      attribution:
-        '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
-    },
-  },
-  layers: [{ id: "basemap", type: "raster", source: "basemap" }],
-};
+// Upstream host that the fetched style's absolute URLs point at, rewritten
+// to our own proxy below.
+const UPSTREAM_TILES = "https://tiles.openfreemap.org";
+
+/**
+ * Loads the basemap style through this site's own /tiles proxy.
+ *
+ * Basemap sourcing took several tries, so the constraints are worth
+ * recording:
+ *   - tile.openstreetmap.org blocks application traffic under OSM's tile
+ *     usage policy (HTTP 200 plus an `x-blocked` header and a placeholder).
+ *   - CARTO works without a key but watermarks every tile with
+ *     "API KEY REQUIRED".
+ *   - OpenFreeMap is free, keyless, and unmetered.
+ *
+ * The style's own URLs are absolute and point at the upstream host, which
+ * would bypass the proxy, so they're rewritten to this origin. That keeps
+ * every request first-party: unblockable by tracker filters, and the tile
+ * host never learns who is looking at which area — which matters more here
+ * than on a typical site.
+ */
+async function loadStyle(): Promise<maplibregl.StyleSpecification> {
+  const base = new URL(TILE_BASE, window.location.origin).toString().replace(/\/$/, "");
+  const res = await fetch(`${base}/styles/positron`);
+  if (!res.ok) throw new Error(`basemap style: HTTP ${res.status}`);
+  const raw = await res.text();
+  return JSON.parse(raw.split(UPSTREAM_TILES).join(base)) as maplibregl.StyleSpecification;
+}
 
 /**
  * Clamps a viewport to valid WGS84 ranges.
@@ -125,13 +129,29 @@ export default function MapPage() {
       return;
     }
 
-    const m = new maplibregl.Map({
-      container: container.current,
-      style: STYLE,
-      center: [-98.5, 39.8], // continental US
-      zoom: 3.6,
-    });
-    map.current = m;
+    let cancelled = false;
+    let m: maplibregl.Map | null = null;
+    let observer: ResizeObserver | null = null;
+
+    void loadStyle()
+      .then((style) => {
+        if (cancelled || !container.current) return;
+        m = new maplibregl.Map({
+          container: container.current,
+          style,
+          center: [-98.5, 39.8], // continental US
+          zoom: 3.6,
+        });
+        map.current = m;
+        setup(m);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        console.error("basemap style failed to load:", err);
+        setError("The base map failed to load.");
+      });
+
+    function setup(m: maplibregl.Map) {
 
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     m.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-right");
@@ -144,8 +164,8 @@ export default function MapPage() {
     // "showing the first 1,000 cameras" blank-map symptom this fixes.
     // Observing the container covers that and later resizes (rotation,
     // mobile toolbars collapsing) without guessing at timings.
-    const observer = new ResizeObserver(() => m.resize());
-    observer.observe(container.current);
+    observer = new ResizeObserver(() => m.resize());
+    if (container.current) observer.observe(container.current);
 
     // Surface style/tile failures instead of rendering a blank white page —
     // the failure mode that hid the OSM tile block during development.
@@ -252,12 +272,14 @@ export default function MapPage() {
         if (refetchTimer.current) window.clearTimeout(refetchTimer.current);
         refetchTimer.current = window.setTimeout(() => void loadCameras(m), 300);
       });
-    });
+      });
+    }
 
     return () => {
+      cancelled = true;
       if (refetchTimer.current) window.clearTimeout(refetchTimer.current);
-      observer.disconnect();
-      m.remove();
+      observer?.disconnect();
+      m?.remove();
       map.current = null;
     };
   }, []);

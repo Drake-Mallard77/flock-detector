@@ -42,9 +42,13 @@
 	#  2. A surveillance-transparency site shouldn't leak its visitors'
 	#     browsing to a third-party CDN in the first place — first-party
 	#     tiles mean the tile host never sees who is looking at what.
+	# OpenFreeMap, not CARTO: CARTO now watermarks "API KEY REQUIRED" across
+	# every tile for keyless use. OpenFreeMap is free with no API key and no
+	# usage limits, and its style references a single host, which is what
+	# makes proxying it practical.
 	handle_path /tiles/* {
-		reverse_proxy https://basemaps.cartocdn.com {
-			header_up Host basemaps.cartocdn.com
+		reverse_proxy https://tiles.openfreemap.org {
+			header_up Host tiles.openfreemap.org
 			# Don't forward the visitor's identifying headers upstream.
 			header_up -Referer
 			header_up -Cookie
