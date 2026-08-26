@@ -8,6 +8,14 @@ ghcr_owner_repo = "your-github-username/flock-detector-api"
 # docker pull ghcr.io/<owner>/flock-detector-api:latest   (prints this)
 image_digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
+# The web app image, same idea:
+# docker pull ghcr.io/<owner>/flock-detector-atlas:latest
+atlas_ghcr_owner_repo = "your-github-username/flock-detector-atlas"
+atlas_image_digest    = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+# Note: the API's ALLOWED_ORIGIN is not set here — it's derived from the
+# deployed site's URL in main.tf so the two can't drift apart.
+
 # Neon (neon.tech) connection string — free-tier serverless Postgres with
 # PostGIS support. `neonctl projects create` prints this; the api's own
 # migration runner creates the PostGIS extension on first connect.
