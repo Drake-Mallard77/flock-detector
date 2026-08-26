@@ -1,11 +1,11 @@
 module "cloud_run" {
   source = "../../modules/cloud-run"
 
-  project_id      = var.project_id
-  region          = var.region
-  ghcr_owner_repo = var.ghcr_owner_repo
-  image_digest    = var.image_digest
-  database_url    = var.database_url
+  project_id       = var.project_id
+  region           = var.region
+  ghcr_owner_repo  = var.ghcr_owner_repo
+  image_digest     = var.image_digest
+  database_url     = var.database_url
   jwt_secret       = var.jwt_secret
   google_client_id = var.google_client_id
 

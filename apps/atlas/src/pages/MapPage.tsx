@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
+import { Link } from "react-router-dom";
 
 import {
   listCameras,
@@ -72,6 +73,20 @@ const API_LIMIT = 1000;
  * OpenStreetMap tags (editable by anyone) and public submissions — i.e.
  * untrusted input. Interpolating them raw would be a stored-XSS vector.
  */
+/** Whether this browser can actually give MapLibre a WebGL context. */
+function hasWebGL(): boolean {
+  try {
+    const canvas = document.createElement("canvas");
+    return Boolean(
+      canvas.getContext("webgl2") ??
+        canvas.getContext("webgl") ??
+        canvas.getContext("experimental-webgl"),
+    );
+  } catch {
+    return false;
+  }
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -90,6 +105,7 @@ export default function MapPage() {
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<CameraFilters>({});
   const [manufacturers, setManufacturers] = useState<ManufacturerCount[]>([]);
+  const [webglMissing, setWebglMissing] = useState(false);
 
   // loadCameras runs from map event handlers that are registered once, so
   // reading `filters` directly there would capture the initial value. A ref
@@ -99,6 +115,15 @@ export default function MapPage() {
 
   useEffect(() => {
     if (!container.current || map.current) return;
+
+    // MapLibre requires WebGL, and privacy browsers sometimes disable it as
+    // a fingerprinting surface — plausible for this site's audience. Check
+    // first so that failure mode reads as an explanation instead of a blank
+    // white page, and so the camera list stays usable.
+    if (!hasWebGL()) {
+      setWebglMissing(true);
+      return;
+    }
 
     const m = new maplibregl.Map({
       container: container.current,
@@ -110,6 +135,17 @@ export default function MapPage() {
 
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     m.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-right");
+
+    // MapLibre measures its container once at construction and caches the
+    // canvas size. This page is lazy-loaded, so it can mount before layout
+    // has settled — the canvas then stays 0x0 and renders nothing, while
+    // the map otherwise "works": `load` fires, data loads, and the
+    // degenerate viewport clamps to the whole world, which is exactly the
+    // "showing the first 1,000 cameras" blank-map symptom this fixes.
+    // Observing the container covers that and later resizes (rotation,
+    // mobile toolbars collapsing) without guessing at timings.
+    const observer = new ResizeObserver(() => m.resize());
+    observer.observe(container.current);
 
     // Surface style/tile failures instead of rendering a blank white page —
     // the failure mode that hid the OSM tile block during development.
@@ -220,6 +256,7 @@ export default function MapPage() {
 
     return () => {
       if (refetchTimer.current) window.clearTimeout(refetchTimer.current);
+      observer.disconnect();
       m.remove();
       map.current = null;
     };
@@ -278,6 +315,23 @@ export default function MapPage() {
       else next[key] = value as never;
       return next;
     });
+  }
+
+  if (webglMissing) {
+    return (
+      <div className="page">
+        <h1>The map needs WebGL</h1>
+        <p className="lede">
+          Your browser has WebGL disabled, so the map can't be drawn. Some privacy browsers and
+          extensions turn it off because it can be used for fingerprinting — a reasonable
+          tradeoff, and not one this site will ask you to reverse.
+        </p>
+        <p>
+          The same records are available as a searchable list on the{" "}
+          <Link to="/deployments">Deployments</Link> page, which needs no WebGL.
+        </p>
+      </div>
+    );
   }
 
   return (

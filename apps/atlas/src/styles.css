@@ -92,6 +92,13 @@ a {
 
 main {
   flex: 1;
+  /* Column flex + min-height:0 lets a full-bleed child (the map) claim the
+     leftover height without a hardcoded header offset. min-height:0 is
+     required: flex items default to min-height:auto, which refuses to
+     shrink and silently breaks the child's height calculation. */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .page {
@@ -224,9 +231,13 @@ main {
 .status-removed { color: var(--text-muted); }
 
 /* Map */
+/* Fills whatever height is left rather than `100vh minus a guessed header
+   height`. That guess was wrong on mobile, where the header wraps to two
+   lines — and on browsers whose toolbars make 100vh taller than the visible
+   viewport. */
 .map-wrap {
   position: relative;
-  height: calc(100vh - 3.6rem);
+  flex: 1;
   min-height: 24rem;
 }
 
