@@ -10,7 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -72,7 +74,11 @@ func (c *Client) ALPRNodesInState(ctx context.Context, stateCode string) ([]Node
 		if err == nil {
 			return nodes, nil
 		}
-		if !errors.Is(err, ErrRateLimited) || attempt >= maxAttempts {
+		// Retry transient network failures too, not just rate limiting. A
+		// full US run makes 51 requests over ~20 minutes, and TLS handshake
+		// timeouts were observed mid-run — without this those states are
+		// silently skipped and need a manual re-run.
+		if !isRetryable(err) || attempt >= maxAttempts {
 			return nil, err
 		}
 
@@ -83,6 +89,32 @@ func (c *Client) ALPRNodesInState(ctx context.Context, stateCode string) ([]Node
 		}
 		backoff *= 2
 	}
+}
+
+// isRetryable reports whether a failed fetch is worth trying again:
+// Overpass rate limiting, or a transient network/timeout error. A context
+// cancellation is never retried — that's the caller shutting down.
+func isRetryable(err error) bool {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	if errors.Is(err, ErrRateLimited) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+	// TLS handshake timeouts and connection resets surface as plain errors
+	// from net/http rather than as net.Error, so match on the text as a
+	// fallback. Narrow enough not to swallow genuine query errors.
+	msg := err.Error()
+	for _, s := range []string{"TLS handshake timeout", "connection reset", "EOF", "no such host"} {
+		if strings.Contains(msg, s) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Client) fetchOnce(ctx context.Context, stateCode string) ([]Node, error) {

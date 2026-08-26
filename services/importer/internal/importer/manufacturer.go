@@ -2,49 +2,124 @@ package importer
 
 import "strings"
 
-// OSM's manufacturer tag is free text, so the same vendor arrives spelled
-// several ways ("Verkada" / "Verkada Inc.", "Axon" / "Axon Enterprise",
-// "Leonardo" / "Leonardo US Cyber and Security Solutions, LLC"). Left alone
-// these filter as separate vendors, which makes the atlas look like it
-// can't count.
+// OSM's manufacturer tag is free text, so one vendor arrives spelled many
+// ways: legal entity names ("Flock Group Inc." is Flock Safety), corporate
+// suffixes, product model numbers, case differences, and outright typos.
+// Left alone they filter as separate vendors, which makes the atlas look
+// like it can't count — and understates the market leader badly. At full US
+// scale, Flock alone was split across three spellings.
 //
-// Mapping is deliberately conservative: it only collapses names that are
-// unambiguously the same company. Anything unrecognized passes through
-// as-is rather than being guessed at or dropped — a vendor we haven't seen
-// before should show up, not disappear.
+// The mapping is deliberately conservative: it collapses only names that
+// are unambiguously the same company. Anything unrecognized passes through
+// with its original spelling rather than being guessed at or dropped, so a
+// genuinely new manufacturer shows up instead of vanishing.
+//
+// Keys are lowercased; NormalizeManufacturer lowercases before lookup.
 var manufacturerAliases = map[string]string{
-	"verkada":      "Verkada",
-	"verkada inc":  "Verkada",
-	"verkada inc.": "Verkada",
+	// Flock Safety — "Flock Group Inc." is the legal entity name.
+	"flock":             "Flock Safety",
+	"flock safety":      "Flock Safety",
+	"flock safety inc":  "Flock Safety",
+	"flock safety inc.": "Flock Safety",
+	"flock group inc":   "Flock Safety",
+	"flock group inc.":  "Flock Safety",
+
+	// Motorola acquired Vigilant Solutions, so tags carry both names.
+	"motorola":                      "Motorola Solutions",
+	"motorola solutions":            "Motorola Solutions",
+	"motorola solutions(vigilant)":  "Motorola Solutions",
+	"motorola solutions (vigilant)": "Motorola Solutions",
+	"vigilant":                      "Motorola Solutions",
+	"vigilant solutions":            "Motorola Solutions",
+
+	"genetec": "Genetec",
+
+	"axis":                "Axis Communications",
+	"axis communications": "Axis Communications",
+
+	"leonardo": "Leonardo",
+	"leonardo us cyber and security solutions, llc":  "Leonardo",
+	"leonardo us cyber and security solutions llc":   "Leonardo",
+	"leonardo us cyber and security solutions, inc.": "Leonardo",
+	"leonardo us cyber and security solutions inc":   "Leonardo",
+
+	"rekor":              "Rekor",
+	"rekor systems":      "Rekor",
+	"rekor systems inc":  "Rekor",
+	"rekor systems inc.": "Rekor",
+
+	"ubicquia":       "Ubicquia",
+	"ubicquia, inc":  "Ubicquia",
+	"ubicquia, inc.": "Ubicquia",
+	"ubicquia inc":   "Ubicquia",
 
 	"axon":            "Axon",
 	"axon enterprise": "Axon",
 
-	"leonardo": "Leonardo",
-	"leonardo us cyber and security solutions, llc": "Leonardo",
-	"leonardo us cyber and security solutions llc":  "Leonardo",
+	"neology":       "Neology",
+	"neology, inc.": "Neology",
+	"neology inc":   "Neology",
 
-	"motorola":            "Motorola Solutions",
-	"motorola solutions":  "Motorola Solutions",
-	"flock":               "Flock Safety",
-	"flock safety":        "Flock Safety",
-	"genetec":             "Genetec",
-	"rekor":               "Rekor",
-	"axis":                "Axis Communications",
-	"axis communications": "Axis Communications",
-	"neology":             "Neology",
-	"neology, inc.":       "Neology",
-	"neology inc":         "Neology",
+	"verkada":      "Verkada",
+	"verkada inc":  "Verkada",
+	"verkada inc.": "Verkada",
+
+	"avigilon": "Avigilon",
+
+	// "Mobitix" is a common misspelling of Mobotix.
+	"mobotix": "Mobotix",
+	"mobitix": "Mobotix",
+
+	"bosch":                  "Bosch",
+	"bosch security systems": "Bosch",
+
+	"uniview":              "Uniview",
+	"uniview technologies": "Uniview",
+
+	"kapsch":            "Kapsch",
+	"kapsch vrx-350x":   "Kapsch",
+	"kapsch trafficcom": "Kapsch",
+
+	// "Pacetalk" is a misspelling of Packetalk.
+	"packetalk": "Packetalk",
+	"pacetalk":  "Packetalk",
+
+	"liveview technologies": "LiveView Technologies",
+	"lvt":                   "LiveView Technologies",
+
+	"platesmart":                "PlateSmart",
+	"platesmart/cyclopstchnlgs": "PlateSmart",
+	"cyclopstechnologies":       "PlateSmart",
+	"cyclops technologies":      "PlateSmart",
+
+	"redspeed":         "RedSpeed",
+	"redspeed usa":     "RedSpeed",
+	"redspeed redcurb": "RedSpeed",
+
+	"hikvision": "Hikvision",
+	"dahua":     "Dahua",
+	"reconyx":   "Reconyx",
+	"transcore": "TransCore",
+	"iteris":    "Iteris",
+	"costar":    "CoStar",
+	"ekin":      "Ekin",
+	// Product names rather than company names.
+	"ekin box spotter": "Ekin",
+	"ekin x spotter":   "Ekin",
 }
 
-// Values that mean "we don't know" and should be stored as NULL rather than
-// becoming a literal vendor named "Unknown" in the filter list.
+// Values that mean "we don't know". Stored as NULL rather than becoming a
+// literal vendor named "Unknown" or "other" in the filter list.
 var manufacturerUnknown = map[string]bool{
 	"unknown":     true,
+	"unkwn":       true,
 	"unspecified": true,
+	"other":       true,
 	"n/a":         true,
+	"na":          true,
 	"none":        true,
 	"?":           true,
+	"-":           true,
 }
 
 // NormalizeManufacturer maps a raw OSM manufacturer tag to a canonical

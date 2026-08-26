@@ -8,8 +8,19 @@ terraform {
     }
   }
 
-  # Local state for now, same reasoning as environments/prod (OCI): get the
-  # first real deploy working before adding a remote-state backend.
+  # Remote state in GCS. Local state lived on one machine, so losing that
+  # machine meant Terraform losing track of the running infrastructure —
+  # it would try to recreate resources that already exist rather than
+  # manage them. The bucket has object versioning enabled so a corrupted
+  # or truncated state can be rolled back.
+  #
+  # State contains db_password and jwt_secret in plaintext, so treat this
+  # bucket as sensitive: it is deliberately not public, and access is
+  # governed by the project's IAM rather than a separate credential.
+  backend "gcs" {
+    bucket = "flockwatch-prod-tfstate"
+    prefix = "gcp"
+  }
 }
 
 provider "google" {

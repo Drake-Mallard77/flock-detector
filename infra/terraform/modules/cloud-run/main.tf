@@ -83,6 +83,13 @@ resource "google_cloud_run_v2_service" "api" {
     # Scale-to-zero is the whole point of choosing Cloud Run over a VM here:
     # at low/idle traffic, actual cost approaches $0 rather than paying for
     # capacity reserved 24/7. See docs/ARCHITECTURE.md.
+    # KNOWN COSMETIC DRIFT: every plan reports this block as changing
+    # (min_instance_count/manual_instance_count 0 -> null). The Cloud Run
+    # API returns 0 while the provider wants null, so the diff reappears
+    # whether the field is set explicitly or omitted entirely — both were
+    # tried. It is a no-op; scale-to-zero is unaffected. Deliberately NOT
+    # silenced with ignore_changes, which would also hide real scaling
+    # changes. Keep it in mind when reading a plan.
     scaling {
       min_instance_count = 0
       max_instance_count = 3

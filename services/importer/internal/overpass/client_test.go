@@ -3,6 +3,7 @@ package overpass
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -117,5 +118,32 @@ func TestALPRNodesInState_NonRetryableError(t *testing.T) {
 	}
 	if errors.Is(err, ErrRateLimited) {
 		t.Error("a 400 should not be treated as rate limiting")
+	}
+}
+
+func TestIsRetryable(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"rate limited", ErrRateLimited, true},
+		{"wrapped rate limit", fmt.Errorf("overpass: %w", ErrRateLimited), true},
+		// Observed during a real full-US run; without this the state is
+		// skipped and needs a manual re-run.
+		{"tls handshake timeout", errors.New(`Post "https://x": net/http: TLS handshake timeout`), true},
+		{"connection reset", errors.New("read tcp: connection reset by peer"), true},
+		{"dns failure", errors.New("dial tcp: no such host"), true},
+		// Cancellation is the caller shutting down, not a transient fault.
+		{"context canceled", context.Canceled, false},
+		{"context deadline", context.DeadlineExceeded, false},
+		// A malformed query is our bug; retrying just wastes Overpass's time.
+		{"bad query", errors.New("overpass returned 400: bad request"), false},
+	}
+
+	for _, c := range cases {
+		if got := isRetryable(c.err); got != c.want {
+			t.Errorf("%s: isRetryable(%v) = %v, want %v", c.name, c.err, got, c.want)
+		}
 	}
 }
