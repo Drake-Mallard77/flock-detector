@@ -241,8 +241,8 @@ main {
   min-height: 24rem;
 }
 
-/* Two-class selector (0,2,0) so this outranks MapLibre's own
-   `.maplibregl-map` (0,1,0), which it applies to this same element and
+/* Two-class selector (0,2,0) so this outranks
+   Leaflet's own container class, which it applies to this same element and
    which sets `position: relative`. Relying on import order alone is too
    fragile — a bundler reordering stylesheets silently collapses the map
    to zero height, which is exactly what happened. Height is also set
@@ -335,17 +335,6 @@ main {
 .popup-source {
   color: var(--text-muted);
   margin-top: 0.3rem;
-}
-
-.maplibregl-popup-content {
-  font-family: inherit;
-  font-size: 0.85rem;
-  padding: 0.7rem 0.85rem;
-}
-
-.maplibregl-popup-content h3 {
-  margin: 0 0 0.3rem;
-  font-size: 0.9rem;
 }
 
 /* Forms */
@@ -538,4 +527,38 @@ button.primary:disabled {
   flex-wrap: wrap;
   border-top: 1px solid var(--border);
   padding-top: 0.8rem;
+}
+
+/* Camera marker swatch in the legend, matching the map markers. */
+.legend-dot-camera {
+  background: var(--status-confirmed);
+}
+
+/* Cluster bubbles, restyled from leaflet.markercluster's stock
+   green/yellow to the site's palette. */
+.marker-cluster {
+  background: rgba(44, 62, 80, 0.25);
+  border-radius: 50%;
+}
+
+.marker-cluster div {
+  background: var(--accent);
+  color: #fff;
+  width: 30px;
+  height: 30px;
+  margin-left: 5px;
+  margin-top: 5px;
+  border-radius: 50%;
+  font: 12px/30px ui-sans-serif, system-ui, sans-serif;
+  text-align: center;
+}
+
+.leaflet-popup-content {
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.leaflet-popup-content h3 {
+  margin: 0 0 0.3rem;
+  font-size: 0.9rem;
 }

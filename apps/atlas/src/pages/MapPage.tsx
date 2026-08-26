@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import maplibregl from "maplibre-gl";
-import { Link } from "react-router-dom";
+import L from "leaflet";
+import "leaflet.markercluster";
 
 import {
   listCameras,
@@ -10,87 +10,46 @@ import {
   type ManufacturerCount,
 } from "../lib/api";
 
-// Same-origin in production (Caddy proxies it). The Vite dev server has no
-// such proxy, so local development falls back to the deployed site's tile
-// path via VITE_TILE_BASE, or the CDN directly.
+// Same-origin in production (Caddy proxies it); the Vite dev server proxies
+// the same path locally. See apps/atlas/Caddyfile.
 const TILE_BASE = import.meta.env.VITE_TILE_BASE ?? "/tiles";
 
-// Upstream host that the fetched style's absolute URLs point at, rewritten
-// to our own proxy below.
-const UPSTREAM_TILES = "https://tiles.openfreemap.org";
-
-/**
- * Loads the basemap style through this site's own /tiles proxy.
- *
- * Basemap sourcing took several tries, so the constraints are worth
- * recording:
- *   - tile.openstreetmap.org blocks application traffic under OSM's tile
- *     usage policy (HTTP 200 plus an `x-blocked` header and a placeholder).
- *   - CARTO works without a key but watermarks every tile with
- *     "API KEY REQUIRED".
- *   - OpenFreeMap is free, keyless, and unmetered.
- *
- * The style's own URLs are absolute and point at the upstream host, which
- * would bypass the proxy, so they're rewritten to this origin. That keeps
- * every request first-party: unblockable by tracker filters, and the tile
- * host never learns who is looking at which area — which matters more here
- * than on a typical site.
- */
-async function loadStyle(): Promise<maplibregl.StyleSpecification> {
-  const base = new URL(TILE_BASE, window.location.origin).toString().replace(/\/$/, "");
-  const res = await fetch(`${base}/styles/positron`);
-  if (!res.ok) throw new Error(`basemap style: HTTP ${res.status}`);
-  const raw = await res.text();
-  return JSON.parse(raw.split(UPSTREAM_TILES).join(base)) as maplibregl.StyleSpecification;
-}
-
-/**
- * Clamps a viewport to valid WGS84 ranges.
- *
- * At low zoom on a wide screen, MapLibre's getBounds() legitimately returns
- * longitudes outside [-180, 180] (the world repeats horizontally). Passing
- * those straight through made the API return an empty array with HTTP 200 —
- * no error, just a silently empty map. If the view spans more than the whole
- * globe, fall back to full world coverage rather than an inverted box.
- */
-function clampBBox(b: maplibregl.LngLatBounds): [number, number, number, number] {
-  const west = b.getWest();
-  const east = b.getEast();
-  const spansGlobe = east - west >= 360;
-
-  return [
-    spansGlobe ? -180 : Math.max(-180, Math.min(180, west)),
-    Math.max(-90, Math.min(90, b.getSouth())),
-    spansGlobe ? 180 : Math.max(-180, Math.min(180, east)),
-    Math.max(-90, Math.min(90, b.getNorth())),
-  ];
-}
-
-// Mirrors the server-side LIMIT in services/api's handleListCameras. If the
-// response hits exactly this, results were almost certainly truncated.
+// Mirrors the server-side LIMIT in services/api's handleListCameras. A
+// response that hits exactly this was almost certainly truncated.
 const API_LIMIT = 1000;
 
 /**
- * Escapes text before it goes into a MapLibre popup.
+ * Leaflet, not MapLibre GL.
  *
- * Popup content is built as an HTML string, and these values originate from
- * OpenStreetMap tags (editable by anyone) and public submissions — i.e.
- * untrusted input. Interpolating them raw would be a stored-XSS vector.
+ * MapLibre requires WebGL, which isn't available everywhere — disabled by
+ * privacy tooling as a fingerprinting surface, by GPU blocklists, or by
+ * hardware acceleration being off. When it's missing the map simply cannot
+ * draw, and this project's readers shouldn't have to weaken their setup (or
+ * own newer hardware) to look at public records. Leaflet renders raster
+ * tiles as ordinary DOM images and works without WebGL, at roughly 1/20th
+ * the bundle size.
+ *
+ * Tiles are Esri's Light Gray Canvas, proxied through this origin. Others
+ * ruled out along the way: tile.openstreetmap.org blocks application
+ * traffic under OSM's tile usage policy; CARTO watermarks keyless tiles
+ * "API KEY REQUIRED"; OpenFreeMap is vector-only at street zoom, which
+ * would put WebGL back in the critical path. Proxying keeps requests
+ * first-party, so tracker blockers don't drop them and the tile host never
+ * learns who is looking at which area.
+ *
+ * Esri serves these {z}/{y}/{x} — row before column, the reverse of the
+ * usual slippy-map order.
  */
-/** Whether this browser can actually give MapLibre a WebGL context. */
-function hasWebGL(): boolean {
-  try {
-    const canvas = document.createElement("canvas");
-    return Boolean(
-      canvas.getContext("webgl2") ??
-        canvas.getContext("webgl") ??
-        canvas.getContext("experimental-webgl"),
-    );
-  } catch {
-    return false;
-  }
-}
+const BASE_TILES = `${TILE_BASE}/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}`;
 
+// Place names ship as a separate overlay in this basemap, so the labels
+// stay crisp above the camera markers instead of being buried by them.
+const LABEL_TILES = `${TILE_BASE}/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}`;
+
+const ATTRIBUTION =
+  'Tiles &copy; Esri | Camera data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+/** Escapes untrusted text before it goes into a Leaflet popup's HTML. */
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -102,226 +61,125 @@ function escapeHtml(value: string): string {
 
 export default function MapPage() {
   const container = useRef<HTMLDivElement>(null);
-  const map = useRef<maplibregl.Map | null>(null);
+  const map = useRef<L.Map | null>(null);
+  const clusterLayer = useRef<L.MarkerClusterGroup | null>(null);
   const refetchTimer = useRef<number | undefined>(undefined);
+
   const [count, setCount] = useState<number | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<CameraFilters>({});
   const [manufacturers, setManufacturers] = useState<ManufacturerCount[]>([]);
-  const [webglMissing, setWebglMissing] = useState(false);
 
-  // loadCameras runs from map event handlers that are registered once, so
-  // reading `filters` directly there would capture the initial value. A ref
-  // keeps those handlers looking at current state.
+  // Map event handlers are registered once, so reading `filters` directly
+  // inside them would capture the initial value. A ref keeps them current.
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
   useEffect(() => {
     if (!container.current || map.current) return;
 
-    // MapLibre requires WebGL, and privacy browsers sometimes disable it as
-    // a fingerprinting surface — plausible for this site's audience. Check
-    // first so that failure mode reads as an explanation instead of a blank
-    // white page, and so the camera list stays usable.
-    if (!hasWebGL()) {
-      setWebglMissing(true);
-      return;
-    }
+    const m = L.map(container.current, {
+      center: [39.8, -98.5], // continental US
+      zoom: 4,
+      worldCopyJump: true,
+    });
+    map.current = m;
 
-    let cancelled = false;
-    let m: maplibregl.Map | null = null;
-    let observer: ResizeObserver | null = null;
+    L.tileLayer(BASE_TILES, { attribution: ATTRIBUTION, maxZoom: 18 }).addTo(m);
+    L.tileLayer(LABEL_TILES, { maxZoom: 18, pane: "shadowPane" }).addTo(m);
 
-    void loadStyle()
-      .then((style) => {
-        if (cancelled || !container.current) return;
-        m = new maplibregl.Map({
-          container: container.current,
-          style,
-          center: [-98.5, 39.8], // continental US
-          zoom: 3.6,
-        });
-        map.current = m;
-        setup(m);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        console.error("basemap style failed to load:", err);
-        setError("The base map failed to load.");
-      });
+    // Clustering isn't cosmetic: a full US import is 100k+ points, and
+    // drawing individual markers at low zoom would stall the browser.
+    const cluster = L.markerClusterGroup({
+      chunkedLoading: true,
+      showCoverageOnHover: false,
+    });
+    clusterLayer.current = cluster;
+    m.addLayer(cluster);
 
-    function setup(m: maplibregl.Map) {
+    // Leaflet measures its container on init; this page is lazy-loaded, so
+    // it can mount before layout settles. Observing the container covers
+    // that plus later changes (rotation, mobile toolbars collapsing).
+    const observer = new ResizeObserver(() => m.invalidateSize());
+    observer.observe(container.current);
 
-    m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-    m.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-right");
-
-    // MapLibre measures its container once at construction and caches the
-    // canvas size. This page is lazy-loaded, so it can mount before layout
-    // has settled — the canvas then stays 0x0 and renders nothing, while
-    // the map otherwise "works": `load` fires, data loads, and the
-    // degenerate viewport clamps to the whole world, which is exactly the
-    // "showing the first 1,000 cameras" blank-map symptom this fixes.
-    // Observing the container covers that and later resizes (rotation,
-    // mobile toolbars collapsing) without guessing at timings.
-    observer = new ResizeObserver(() => m.resize());
-    if (container.current) observer.observe(container.current);
-
-    // Surface style/tile failures instead of rendering a blank white page —
-    // the failure mode that hid the OSM tile block during development.
-    m.on("error", (e) => {
-      console.error("MapLibre error:", e.error);
-      setError("The base map failed to load. Camera data may still be listed below.");
+    void loadCameras(m);
+    // Refetch the visible area on pan/zoom. The API caps each response at
+    // 1,000 rows and a single state can hold several thousand, so a single
+    // unfiltered fetch would silently show an arbitrary subset of the
+    // country. Debounced so a drag doesn't fire a request per frame.
+    m.on("moveend", () => {
+      if (refetchTimer.current) window.clearTimeout(refetchTimer.current);
+      refetchTimer.current = window.setTimeout(() => void loadCameras(m), 300);
     });
 
-    m.on("load", () => {
-      m.addSource("cameras", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-        // Clustering matters here, not just for looks: a full US import is
-        // 100k+ points and drawing them individually at low zoom would
-        // stall the browser.
-        cluster: true,
-        clusterRadius: 45,
-        clusterMaxZoom: 13,
-      });
-
-      m.addLayer({
-        id: "clusters",
-        type: "circle",
-        source: "cameras",
-        filter: ["has", "point_count"],
-        paint: {
-          "circle-color": "#2c3e50",
-          "circle-opacity": 0.82,
-          "circle-radius": ["step", ["get", "point_count"], 14, 25, 19, 100, 25, 750, 32],
-        },
-      });
-
-      m.addLayer({
-        id: "cluster-count",
-        type: "symbol",
-        source: "cameras",
-        filter: ["has", "point_count"],
-        layout: {
-          "text-field": ["get", "point_count_abbreviated"],
-          "text-size": 12,
-        },
-        paint: { "text-color": "#ffffff" },
-      });
-
-      m.addLayer({
-        id: "camera-point",
-        type: "circle",
-        source: "cameras",
-        filter: ["!", ["has", "point_count"]],
-        paint: {
-          "circle-color": "#1b6b4a",
-          "circle-radius": 5,
-          "circle-stroke-width": 1.5,
-          "circle-stroke-color": "#ffffff",
-        },
-      });
-
-      m.on("click", "clusters", (e) => {
-        const feature = m.queryRenderedFeatures(e.point, { layers: ["clusters"] })[0];
-        const clusterId = feature?.properties?.cluster_id;
-        if (clusterId == null) return;
-        const source = m.getSource("cameras") as maplibregl.GeoJSONSource;
-        void source.getClusterExpansionZoom(clusterId).then((zoom) => {
-          m.easeTo({
-            center: (feature.geometry as GeoJSON.Point).coordinates as [number, number],
-            zoom,
-          });
-        });
-      });
-
-      m.on("click", "camera-point", (e) => {
-        const f = e.features?.[0];
-        if (!f) return;
-        const p = f.properties ?? {};
-        const [lng, lat] = (f.geometry as GeoJSON.Point).coordinates;
-        new maplibregl.Popup({ closeButton: true })
-          .setLngLat([lng, lat])
-          .setHTML(
-            `<h3>${escapeHtml(p.manufacturer ? String(p.manufacturer) : "ALPR camera")}</h3>
-             <div>${p.camera_type ? escapeHtml(String(p.camera_type)) : "Type not recorded"}${
-               p.direction !== undefined && p.direction !== null
-                 ? ` · facing ${Number(p.direction)}°`
-                 : ""
-             }</div>
-             <div class="popup-source">
-               ${p.source === "osm_import" ? "Source: OpenStreetMap" : "Source: community report"}
-             </div>`,
-          )
-          .addTo(m);
-      });
-
-      for (const layer of ["clusters", "camera-point"]) {
-        m.on("mouseenter", layer, () => (m.getCanvas().style.cursor = "pointer"));
-        m.on("mouseleave", layer, () => (m.getCanvas().style.cursor = ""));
-      }
-
-      void loadCameras(m);
-      // Refetch for the visible area as the user pans/zooms. The API caps
-      // each response at 1,000 rows and a single state can hold several
-      // thousand, so fetching once without a bbox would silently show an
-      // arbitrary subset of the country. Debounced so a drag doesn't fire
-      // a request per frame.
-      m.on("moveend", () => {
-        if (refetchTimer.current) window.clearTimeout(refetchTimer.current);
-        refetchTimer.current = window.setTimeout(() => void loadCameras(m), 300);
-      });
-      });
-    }
-
     return () => {
-      cancelled = true;
       if (refetchTimer.current) window.clearTimeout(refetchTimer.current);
-      observer?.disconnect();
-      m?.remove();
+      observer.disconnect();
+      m.remove();
       map.current = null;
+      clusterLayer.current = null;
     };
   }, []);
 
   // Vendor list comes from the data, not a hardcoded array — OSM
   // contributors add manufacturers over time, and a static list goes
-  // silently out of date (it once listed 4 while the data held 20+).
-  // A failure here only costs the dropdown, so it doesn't surface an error.
+  // silently out of date. A failure here only costs the dropdown.
   useEffect(() => {
     listManufacturers()
       .then(setManufacturers)
       .catch(() => setManufacturers([]));
   }, []);
 
-  // Refetch when a filter changes (the map-event path only fires on pan/zoom).
+  // Refetch when a filter changes (the map-event path only fires on move).
   useEffect(() => {
-    const m = map.current;
-    if (m?.isStyleLoaded()) void loadCameras(m);
+    if (map.current) void loadCameras(map.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
-  async function loadCameras(m: maplibregl.Map) {
-    const bbox = clampBBox(m.getBounds());
+  async function loadCameras(m: L.Map) {
+    const b = m.getBounds();
+    // Clamp to valid WGS84: at low zoom the world repeats horizontally, so
+    // Leaflet can legitimately report longitudes beyond ±180. Passing those
+    // through made the API return an empty array with HTTP 200 — no error,
+    // just an empty map.
+    const bbox: [number, number, number, number] = [
+      Math.max(-180, b.getWest()),
+      Math.max(-90, b.getSouth()),
+      Math.min(180, b.getEast()),
+      Math.min(90, b.getNorth()),
+    ];
 
     try {
       const cameras: CameraSighting[] = await listCameras(bbox, filtersRef.current);
-      const source = m.getSource("cameras") as maplibregl.GeoJSONSource | undefined;
-      if (!source) return;
-      source.setData({
-        type: "FeatureCollection",
-        features: cameras.map((c) => ({
-          type: "Feature" as const,
-          geometry: { type: "Point" as const, coordinates: [c.lng, c.lat] },
-          properties: {
-            id: c.id,
-            camera_type: c.camera_type ?? null,
-            manufacturer: c.manufacturer ?? null,
-            direction: c.direction ?? null,
-            source: c.source,
-          },
-        })),
+      const cluster = clusterLayer.current;
+      if (!cluster) return;
+
+      cluster.clearLayers();
+      const markers = cameras.map((c) => {
+        const marker = L.circleMarker([c.lat, c.lng], {
+          radius: 5,
+          color: "#ffffff",
+          weight: 1.5,
+          fillColor: "#1b6b4a",
+          fillOpacity: 1,
+        });
+        const heading =
+          c.direction !== undefined && c.direction !== null
+            ? ` · facing ${Number(c.direction)}°`
+            : "";
+        marker.bindPopup(
+          `<h3>${escapeHtml(c.manufacturer ?? "ALPR camera")}</h3>
+           <div>${c.camera_type ? escapeHtml(c.camera_type) : "Type not recorded"}${heading}</div>
+           <div class="popup-source">${
+             c.source === "osm_import" ? "Source: OpenStreetMap" : "Source: community report"
+           }</div>`,
+        );
+        return marker;
       });
+      cluster.addLayers(markers);
+
       setCount(cameras.length);
       setTruncated(cameras.length >= API_LIMIT);
       setError(null);
@@ -337,23 +195,6 @@ export default function MapPage() {
       else next[key] = value as never;
       return next;
     });
-  }
-
-  if (webglMissing) {
-    return (
-      <div className="page">
-        <h1>The map needs WebGL</h1>
-        <p className="lede">
-          Your browser has WebGL disabled, so the map can't be drawn. Some privacy browsers and
-          extensions turn it off because it can be used for fingerprinting — a reasonable
-          tradeoff, and not one this site will ask you to reverse.
-        </p>
-        <p>
-          The same records are available as a searchable list on the{" "}
-          <Link to="/deployments">Deployments</Link> page, which needs no WebGL.
-        </p>
-      </div>
-    );
   }
 
   return (
@@ -405,7 +246,7 @@ export default function MapPage() {
       <div className="map-legend">
         <h2>Camera locations</h2>
         <div className="legend-row">
-          <span className="legend-dot" style={{ background: "#1b6b4a" }} />
+          <span className="legend-dot legend-dot-camera" />
           <span>Documented ALPR camera</span>
         </div>
         <p className="legend-note">
