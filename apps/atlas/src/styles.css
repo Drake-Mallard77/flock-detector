@@ -259,6 +259,8 @@ main {
   position: absolute;
   bottom: 1.5rem;
   left: 0.75rem;
+  /* See .map-filters — must clear Leaflet's panes (400) and controls (800). */
+  z-index: 900;
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -298,7 +300,9 @@ main {
   position: absolute;
   top: 0.75rem;
   left: 0.75rem;
-  z-index: 1;
+  /* Above Leaflet: its map panes are z-index 400 and its own controls
+     800, so anything lower renders underneath the tiles. */
+  z-index: 900;
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid var(--border);
   border-radius: 6px;
