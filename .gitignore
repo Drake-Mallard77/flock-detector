@@ -28,3 +28,10 @@ crash.log
 .idea/
 .DS_Store
 Thumbs.db
+
+# Service-account key files. These are private keys: a single `git add -A`
+# is all it takes to publish one, and revoking a leaked key means rotating
+# every consumer of it. Generated keys belong outside the repo entirely —
+# this pattern is a backstop, not a licence to keep them here.
+*-key.json
+**/service-account*.json
