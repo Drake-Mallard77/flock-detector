@@ -9,6 +9,9 @@ const API_BASE =
 export type DeploymentStatus =
   | "confirmed"
   | "contract_found"
+  /** Published, but mapped in OpenStreetMap rather than verified against
+   *  public records. Deliberately distinct from "confirmed". */
+  | "osm_documented"
   | "under_review"
   | "disputed"
   | "removed";

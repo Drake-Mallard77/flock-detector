@@ -33,6 +33,12 @@ export default function MethodologyPage() {
             as camera counts may still be unverified.
           </li>
           <li>
+            <strong>OSM documented</strong> — mapped by OpenStreetMap contributors and
+            attributed to this operator, but <em>not</em> checked against public records. It
+            means someone recorded these cameras in the field, not that an agency's paperwork
+            confirms them. Most records on this site currently carry this status.
+          </li>
+          <li>
             <strong>Under review</strong> — submitted, not yet verified. Not treated as
             established fact.
           </li>
@@ -40,6 +46,20 @@ export default function MethodologyPage() {
             <strong>Disputed</strong> — someone contested the record and it is being re-checked.
           </li>
         </ul>
+
+        <h2>Why "OSM documented" is its own status</h2>
+        <p>
+          Camera locations come from OpenStreetMap, and where contributors recorded an{" "}
+          <code>operator</code> tag, this atlas groups those cameras into an agency-level
+          record. That grouping is mechanical: it reflects what volunteers mapped, not a
+          document anyone filed.
+        </p>
+        <p>
+          Calling those records "confirmed" would claim exactly the verification this project
+          exists to do. So they publish under their own status instead, and become{" "}
+          <strong>Confirmed</strong> only once a moderator has checked them against a council
+          report, contract, invoice, or FOIA response.
+        </p>
 
         <h2>What we don't know, we mark</h2>
         <p>

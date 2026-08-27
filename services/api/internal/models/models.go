@@ -15,6 +15,11 @@ type DeploymentStatus string
 const (
 	StatusConfirmed     DeploymentStatus = "confirmed"
 	StatusContractFound DeploymentStatus = "contract_found"
+	// Published, but explicitly NOT verified against public records:
+	// mapped by OpenStreetMap contributors and attributed to this operator.
+	// Distinct from StatusConfirmed so the atlas never claims a level of
+	// verification it hasn't done. See migration 0006.
+	StatusOSMDocumented DeploymentStatus = "osm_documented"
 	StatusUnderReview   DeploymentStatus = "under_review"
 	StatusDisputed      DeploymentStatus = "disputed"
 	StatusRemoved       DeploymentStatus = "removed"
@@ -53,7 +58,8 @@ func IsValidEvidenceType(v string) bool {
 // ValidDeploymentStatuses lists every status value the deployments table's
 // CHECK constraint accepts.
 var ValidDeploymentStatuses = []DeploymentStatus{
-	StatusConfirmed, StatusContractFound, StatusUnderReview, StatusDisputed, StatusRemoved,
+	StatusConfirmed, StatusContractFound, StatusOSMDocumented,
+	StatusUnderReview, StatusDisputed, StatusRemoved,
 }
 
 func IsValidDeploymentStatus(v string) bool {

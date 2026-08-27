@@ -810,3 +810,9 @@ button.primary:disabled {
   color: var(--status-contract);
   border-color: currentColor;
 }
+
+/* Published, but explicitly not verified against public records. Styled
+   distinctly from confirmed so the difference is visible at a glance. */
+.status-osm_documented {
+  color: var(--status-review);
+}

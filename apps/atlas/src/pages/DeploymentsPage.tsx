@@ -8,6 +8,7 @@ const TABS: Array<{ value: DeploymentStatus | "all"; label: string }> = [
   { value: "all", label: "All records" },
   { value: "confirmed", label: "Confirmed" },
   { value: "contract_found", label: "Contract found" },
+  { value: "osm_documented", label: "OSM documented" },
   { value: "under_review", label: "Under review" },
 ];
 

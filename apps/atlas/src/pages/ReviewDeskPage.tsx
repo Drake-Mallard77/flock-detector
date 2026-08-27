@@ -36,6 +36,9 @@ const OPERATOR_TYPE_LABELS: Record<string, string> = {
 const DECISIONS: Array<{ status: DeploymentStatus; label: string }> = [
   { status: "confirmed", label: "Confirm" },
   { status: "contract_found", label: "Contract found" },
+  // For OSM-derived candidates: publishes without claiming the
+  // public-records verification that "Confirm" asserts.
+  { status: "osm_documented", label: "Mark OSM-documented" },
   { status: "disputed", label: "Dispute" },
   { status: "removed", label: "Remove" },
 ];
