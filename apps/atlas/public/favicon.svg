@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="FlockWatch">
+  <!--
+    A camera lens, drawn to survive 16px. Everything here is a filled shape
+    with a hard colour break: strokes thinner than ~2 units in this viewBox
+    disappear entirely at favicon size, and gradients turn to mud.
+
+    The tile carries its own dark background rather than being transparent,
+    so it reads the same against a light or dark browser chrome. A
+    transparent glyph inherits the tab colour and vanishes in one theme.
+  -->
+  <rect width="32" height="32" rx="7" fill="#0d1520" />
+
+  <!-- Lens barrel. -->
+  <circle cx="16" cy="16" r="9.5" fill="#7dd3fc" />
+  <circle cx="16" cy="16" r="6.5" fill="#0d1520" />
+
+  <!-- Aperture. -->
+  <circle cx="16" cy="16" r="3.2" fill="#7dd3fc" />
+
+  <!--
+    There was a catchlight here to make the lens read as glass. It worked at
+    64px and broke at 16: it landed on the boundary of the outer ring, merged
+    with it, and turned the mark into a notched "C". Three concentric shapes
+    is what survives the actual display size.
+  -->
+</svg>
