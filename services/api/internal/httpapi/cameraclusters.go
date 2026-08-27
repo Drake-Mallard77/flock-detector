@@ -24,9 +24,15 @@ import (
 // them.
 const (
 	// Grid cells are sized to render at roughly this many screen pixels.
-	// Small enough that clusters follow the shape of real deployments,
-	// large enough that a full viewport is a few hundred cells.
-	clusterCellPixels = 64
+	//
+	// Bubbles are ~40px and sit on the mean position of their cameras rather
+	// than the cell's centre, so neighbouring bubbles can end up much closer
+	// together than the cell spacing implies. At 64px that produced visible
+	// overlap in dense regions — Los Angeles and south Florida each had
+	// three bubbles piled on each other. 88px spaces them out while keeping
+	// roughly state-level granularity across a national view; going much
+	// wider collapses neighbouring metros into a single meaningless blob.
+	clusterCellPixels = 88
 	// Web Mercator tiles are 256px, which is what relates zoom to degrees.
 	tilePixels = 256
 	// A viewport is at most a few hundred cells (see above), so this only
