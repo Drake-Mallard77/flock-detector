@@ -135,6 +135,13 @@ resource "google_cloud_run_v2_service" "api" {
         value = "production"
       }
 
+      # Base URL for absolute links in the sitemap. This is the site the
+      # reader visits, not this API, so it cannot be inferred from here.
+      env {
+        name  = "SITE_URL"
+        value = var.site_url
+      }
+
       # Plain env var, not Secret Manager: this is a public identifier that
       # already ships in the browser bundle. Its role is to pin the expected
       # audience when validating Google ID tokens, not to authenticate us.

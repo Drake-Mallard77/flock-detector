@@ -1,0 +1,14 @@
+# FlockWatch — a public-records atlas of ALPR/Flock Safety deployments.
+#
+# Indexing is the point: this documents public surveillance procurement, and
+# it only helps people if it's findable. Crawling is open by default.
+
+User-agent: *
+Allow: /
+
+# Moderator queue. Auth-gated, so a crawler gets nothing but a login state.
+Disallow: /review
+
+# Generated from the database rather than served as a static file, so it
+# reflects records imported since the last deploy.
+Sitemap: https://theflockwatcher.com/sitemap.xml

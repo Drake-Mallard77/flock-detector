@@ -1,3 +1,14 @@
+locals {
+  # Derived from var.site_domain alone, deliberately not from module
+  # outputs. module.cloud_run already depends on module.atlas.url (for
+  # ALLOWED_ORIGIN below), so pointing the atlas at module.cloud_run.url
+  # would close a dependency cycle between the two services. Both are
+  # reachable at predictable names under the custom domain anyway, so the
+  # module output adds nothing here.
+  site_url   = var.site_domain != "" ? "https://${var.site_domain}" : ""
+  api_origin = var.site_domain != "" ? "https://api.${var.site_domain}" : ""
+}
+
 module "cloud_run" {
   source = "../../modules/cloud-run"
 
@@ -18,6 +29,8 @@ module "cloud_run" {
     var.site_domain != "" ? "https://${var.site_domain}" : "",
     var.site_domain != "" ? "https://www.${var.site_domain}" : "",
   ]))
+
+  site_url = local.site_url
 }
 
 module "atlas" {
@@ -32,6 +45,16 @@ module "atlas" {
     var.atlas_ghcr_owner_repo,
     var.atlas_image_digest,
   )
+
+  env = {
+    # Canonical host. Requests arriving on any other hostname (notably www)
+    # are redirected here so the two don't compete as duplicate content.
+    SITE_HOST = var.site_domain
+    # Where Caddy proxies /sitemap.xml. It has to be served from the site's
+    # own origin to be a valid sitemap for these URLs, but only the API can
+    # generate it, so the site origin proxies to the API.
+    API_ORIGIN = local.api_origin
+  }
 }
 
 # Scheduled data maintenance. Reuses the API's runtime service account and

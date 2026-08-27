@@ -161,3 +161,16 @@ func serverError(w http.ResponseWriter, r *http.Request, status int, clientMessa
 	)
 	writeError(w, status, clientMessage)
 }
+
+// logEncodeFailure records a response that failed partway through writing.
+// Nothing can be done for the client at that point — the status line is
+// already sent — but a truncated sitemap that looks like a success from the
+// outside is exactly the kind of failure worth being able to find later.
+func logEncodeFailure(r *http.Request, err error) {
+	slog.LogAttrs(r.Context(), slog.LevelError, "failed while writing the response body",
+		slog.String("error", err.Error()),
+		slog.String("path", r.URL.Path),
+		slog.String("request_id", middleware.GetReqID(r.Context())),
+		slog.String("@type", reportedErrorType),
+	)
+}

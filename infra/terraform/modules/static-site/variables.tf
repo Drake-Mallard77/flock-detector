@@ -27,3 +27,9 @@ variable "memory" {
   default     = "512Mi"
   description = "Caddy serving static files needs far less than this, but Cloud Run rejects anything under 512Mi at 1 CPU. Lowering it requires lowering cpu too."
 }
+
+variable "env" {
+  type        = map(string)
+  default     = {}
+  description = "Environment variables for the container. Read by the Caddyfile at startup; the app bundle's own config is inlined at build time instead."
+}

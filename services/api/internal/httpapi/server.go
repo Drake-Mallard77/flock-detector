@@ -50,6 +50,12 @@ func (s *Server) Router() http.Handler {
 	// warrant different alerts and different responses.
 	r.Get("/health/data", s.handleDataFreshness)
 
+	// Served from here rather than as a build-time file in the atlas: the
+	// record set refreshes weekly while deploys are occasional, so a static
+	// sitemap would advertise a stale snapshot. Caddy proxies
+	// /sitemap.xml on the site origin to this.
+	r.Get("/sitemap.xml", s.handleSitemap)
+
 	r.Route("/deployments", func(r chi.Router) {
 		r.Get("/", s.handleListDeployments)
 		r.With(s.submissionLimiter.middleware).Post("/", s.handleCreateDeployment)

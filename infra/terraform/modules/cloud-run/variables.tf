@@ -61,3 +61,9 @@ variable "memory" {
   type    = string
   default = "512Mi"
 }
+
+variable "site_url" {
+  type        = string
+  default     = ""
+  description = "Public origin of the web app, used for absolute URLs in the sitemap. Not the API's own URL."
+}

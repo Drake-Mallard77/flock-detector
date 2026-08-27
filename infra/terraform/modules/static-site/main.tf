@@ -24,6 +24,18 @@ resource "google_cloud_run_v2_service" "site" {
     containers {
       image = var.image
 
+      # Read by the Caddyfile, not by the bundle: Vite inlines its own env
+      # at build time, but Caddy resolves {$VAR} at startup. These configure
+      # routing (canonical host, where to proxy the sitemap), so they belong
+      # to the deployment rather than the build.
+      dynamic "env" {
+        for_each = var.env
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+
       resources {
         limits = {
           cpu    = var.cpu

@@ -8,6 +8,48 @@
       name="description"
       content="A public-records atlas of Flock Safety / ALPR surveillance deployments across the US."
     />
+    <link rel="canonical" href="https://theflockwatcher.com/" />
+
+    <!--
+      Social preview cards.
+
+      Known limitation: this is a client-rendered SPA served from a single
+      HTML shell, so every route shares these tags. A link to one agency's
+      record previews the same card as the homepage. Most social crawlers
+      don't run JS, so setting them from React wouldn't fix it — that needs
+      prerendering or server-rendered meta for /deployments/:id, which is a
+      real change rather than a tag tweak. Left as-is deliberately: a
+      correct generic card beats a per-record card that only works in the
+      crawlers that happen to execute JavaScript.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="FlockWatch" />
+    <meta property="og:title" content="FlockWatch — Public Records Atlas" />
+    <meta
+      property="og:description"
+      content="Where automated license plate readers are deployed across the US — every record linked to its source."
+    />
+    <meta property="og:url" content="https://theflockwatcher.com/" />
+    <meta property="og:image" content="https://theflockwatcher.com/og-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="FlockWatch — Public Records Atlas. Where automated license plate readers are deployed across the US."
+    />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="FlockWatch — Public Records Atlas" />
+    <meta
+      name="twitter:description"
+      content="Where automated license plate readers are deployed across the US — every record linked to its source."
+    />
+    <meta name="twitter:image" content="https://theflockwatcher.com/og-card.png" />
+
+    <!-- Browser UI colour, per theme, so the address bar matches the page. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f9fb" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0d1520" />
+
     <script>
       // Applies the saved theme before first paint. Without this the page
       // renders light, then flips to dark once React mounts — a visible

@@ -21,6 +21,11 @@ type Config struct {
 	// doubles as the expected `aud` when validating ID tokens, so an empty
 	// value must disable Google sign-in entirely rather than skip the check.
 	GoogleClientID string
+	// SiteURL is the public origin of the web app, used to build absolute
+	// URLs in the sitemap. It is the site's origin, not the API's: the
+	// sitemap lists pages a reader visits, which are served from the atlas.
+	// Trailing slashes are trimmed so callers can concatenate paths.
+	SiteURL string
 }
 
 func Load() Config {
@@ -31,6 +36,7 @@ func Load() Config {
 		AllowedOrigin:  getenv("ALLOWED_ORIGIN", "http://localhost:5173"),
 		Env:            getenv("ENV", "development"),
 		GoogleClientID: getenv("GOOGLE_CLIENT_ID", ""),
+		SiteURL:        strings.TrimRight(getenv("SITE_URL", "http://localhost:5173"), "/"),
 	}
 }
 

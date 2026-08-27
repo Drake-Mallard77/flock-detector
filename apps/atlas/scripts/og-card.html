@@ -1,0 +1,130 @@
+<!doctype html>
+<!--
+  Source for public/og-card.png. Rendered at exactly 1200x630 by
+  scripts/generate-og.mjs — see that file for why this is a checked-in
+  template rather than a hand-made image.
+
+  Deliberately says nothing that goes stale: no record counts, no dates. An
+  OG image is cached hard by every platform that scrapes it, so anything
+  time-sensitive here would be wrong within a week and impossible to recall.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+
+      body {
+        width: 1200px;
+        height: 630px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 0 88px;
+        position: relative;
+        overflow: hidden;
+        background: #0d1520;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: #f2f6fa;
+      }
+
+      /* Scattered points suggesting mapped camera locations, denser toward
+         the right so the text side stays clean. Static, hand-placed rather
+         than random: a generated scatter drifts on every regeneration and
+         makes the diff meaningless. */
+      .field {
+        position: absolute;
+        inset: 0;
+        background-image:
+          radial-gradient(circle at 68% 22%, #7dd3fc 0 6px, transparent 7px),
+          radial-gradient(circle at 76% 38%, #7dd3fc 0 10px, transparent 11px),
+          radial-gradient(circle at 88% 30%, #7dd3fc 0 6px, transparent 7px),
+          radial-gradient(circle at 72% 62%, #7dd3fc 0 8px, transparent 9px),
+          radial-gradient(circle at 84% 74%, #7dd3fc 0 13px, transparent 14px),
+          radial-gradient(circle at 93% 55%, #7dd3fc 0 6px, transparent 7px),
+          radial-gradient(circle at 62% 82%, #7dd3fc 0 5px, transparent 6px),
+          radial-gradient(circle at 80% 12%, #7dd3fc 0 4px, transparent 5px),
+          radial-gradient(circle at 95% 86%, #7dd3fc 0 8px, transparent 9px),
+          radial-gradient(circle at 66% 46%, #7dd3fc 0 5px, transparent 6px),
+          radial-gradient(circle at 90% 66%, #7dd3fc 0 5px, transparent 6px),
+          radial-gradient(circle at 78% 90%, #7dd3fc 0 6px, transparent 7px);
+        opacity: 0.9;
+      }
+
+      /* Wash that pulls the eye left toward the wordmark. It has to fade the
+         points out behind the text without erasing them on the right — at a
+         heavier opacity they stopped reading as mapped locations and just
+         looked like sensor noise. */
+      .wash {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          100deg,
+          #0d1520 40%,
+          rgba(13, 21, 32, 0.82) 52%,
+          rgba(13, 21, 32, 0.12) 100%
+        );
+      }
+
+      .content { position: relative; }
+
+      .rule {
+        width: 96px;
+        height: 6px;
+        background: #7dd3fc;
+        border-radius: 3px;
+        margin-bottom: 34px;
+      }
+
+      h1 {
+        font-size: 92px;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        line-height: 1;
+      }
+
+      .kicker {
+        margin-top: 20px;
+        font-size: 30px;
+        font-weight: 600;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: #7dd3fc;
+      }
+
+      p {
+        margin-top: 34px;
+        font-size: 31px;
+        line-height: 1.45;
+        color: #b9c6d4;
+        max-width: 660px;
+      }
+
+      .domain {
+        position: absolute;
+        left: 88px;
+        bottom: 54px;
+        font-size: 25px;
+        font-weight: 600;
+        color: #8fa3b8;
+        letter-spacing: 0.02em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="field"></div>
+    <div class="wash"></div>
+
+    <div class="content">
+      <div class="rule"></div>
+      <h1>FlockWatch</h1>
+      <div class="kicker">Public Records Atlas</div>
+      <p>
+        Where automated license plate readers are deployed across the US —
+        every record linked to its source.
+      </p>
+    </div>
+
+    <div class="domain">theflockwatcher.com</div>
+  </body>
+</html>

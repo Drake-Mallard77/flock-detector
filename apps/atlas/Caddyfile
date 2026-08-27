@@ -9,6 +9,31 @@
 	root * /srv
 	encode gzip
 
+	# Canonical host: www redirects to the apex.
+	#
+	# Cloud Run's domain mapping serves both from this same container, so
+	# without this they answer 200 with identical content — duplicate content
+	# that splits search ranking across two URLs for every page.
+	#
+	# Matching `www.` specifically rather than "any host that isn't
+	# canonical" is deliberate. The general form has to be inert when
+	# SITE_HOST is unset (local dev, the bare run.app URL), and every version
+	# of that check is a redirect loop or an outage waiting for the one
+	# environment where the variable is missing. Matching one known-bad
+	# prefix cannot misfire: localhost and run.app hostnames never start
+	# with www.
+	@www header_regexp Host ^www\.
+	redir @www https://{$SITE_HOST:theflockwatcher.com}{uri} permanent
+
+	# /sitemap.xml is generated from the database by the API, because the
+	# record set refreshes weekly while deploys are occasional — a file baked
+	# at build time would advertise a stale snapshot. It has to be served
+	# from this origin to be valid for these URLs, hence the proxy rather
+	# than a link to the API host.
+	handle /sitemap.xml {
+		reverse_proxy {$API_ORIGIN:http://localhost:8080}
+	}
+
 	# Long-lived caching for content-hashed build assets; never for the HTML
 	# shell, which would otherwise keep pointing at old asset hashes after a
 	# deploy. Matching "not /assets/*" rather than "/index.html" is
@@ -71,6 +96,20 @@
 			header_up -X-Forwarded-For
 		}
 		header Cache-Control "public, max-age=86400"
+	}
+
+	# Requests that name a file extension are served as files or 404 — they
+	# never fall through to the SPA shell.
+	#
+	# Without this, try_files below answered *every* unmatched path with
+	# index.html and a 200, including /robots.txt: crawlers asking for
+	# robots.txt got an HTML document with `Content-Type: text/html` and a
+	# success status, which is worse than a 404 because nothing signals that
+	# the file is absent. Same for a mistyped asset — a missing script
+	# returned HTML instead of failing.
+	@file path_regexp \.[a-zA-Z0-9]{2,5}$
+	handle @file {
+		file_server
 	}
 
 	# SPA history routing: react-router owns /deployments/:id etc., so any
