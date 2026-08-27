@@ -29,7 +29,7 @@ submissions and by the OSM/DeFlock bootstrap import (`source = osm_import`).
 ## Bootstrap data: OSM / DeFlock — Phase 3, done
 
 `services/importer` (see its [README](../services/importer/README.md)). OSM nodes tagged
-`man_made=surveillance` + `surveillance:type=ALPR` + `manufacturer=Flock Safety` are fetched
+`man_made=surveillance` + `surveillance:type=ALPR` are fetched
 via Overpass QL (`https://overpass-api.de/api/interpreter`), one US state at a time, and
 upserted into `camera_sightings` keyed on `external_id` (`osm:node:<id>`) so re-runs update
 rather than duplicate.
@@ -44,9 +44,9 @@ already been through OpenStreetMap's community review, and queueing 100k+ pins f
 would bury the submissions that actually need it.
 
 OSM data is **ODbL** — the derived database must stay attributable ("© OpenStreetMap
-contributors", shown on the Methodology page); share-alike applies to the database itself, not
-just the rendered map. **This attribution is not yet built into any UI** — it must ship with
-the Phase 4 web app.
+contributors"); share-alike applies to the database itself, not just the rendered map. The
+attribution is live: in the footer on every page, and in the Methodology page's licensing
+section.
 
 Real scale, measured: DC ~86 cameras, California ~14,900; a full US import is 100k+ rows.
 The public Overpass instance rate-limits aggressively (429 on back-to-back large-state queries
@@ -77,11 +77,14 @@ flock-detector/
 
 - Router: `go-chi`. Endpoints: `GET/POST /deployments`, `GET /deployments/{id}`,
   `POST /deployments/{id}/review` (moderator/admin only), `GET/POST /cameras`.
-- Auth: JWT (`golang-jwt/v5`), role-gated middleware. **`POST /auth/dev-login` is a stub**
-  (upserts a user by email, issues a JWT for a requested role, no verification) that exists
-  only to unblock local testing of the moderator-gated endpoints before real email
-  magic-link/OAuth ships in Phase 5. It is only mounted when `ENV != production`
-  (`config.DevAuthEnabled`) — real auth must replace it before this goes live.
+- Auth: Google Sign-In exchanged for our own JWT (`golang-jwt/v5`), role-gated middleware.
+  The Google ID token is *validated* — signature against Google's JWKS, plus issuer, expiry,
+  and audience — rather than merely decoded, and the role always comes from our database.
+  Signing in proves an email address and nothing more. Roles are granted only through the
+  `grant-role` CLI, which requires database credentials; there is deliberately no web path to
+  moderator access. `requireRole` re-reads the role per request, so revocation takes effect
+  immediately instead of when a 24h token expires. `POST /auth/dev-login` survives as a
+  local-development stub and is never mounted when `ENV=production`.
 - DB: Postgres 16 + PostGIS, `geography(Point,4326)` + GiST index for bbox queries. A minimal
   embedded SQL migration runner (`internal/db/migrate.go`) applies `migrations/*.sql` in
   filename order, tracked in a `schema_migrations` table — no external migration tool
@@ -100,7 +103,8 @@ flock-detector/
 `infra/terraform/{modules/cloud-run,environments/gcp}`. See
 [infra/terraform/README.md](../infra/terraform/README.md) for the operational how-to.
 
-**Live deployment**: `https://flockwatch-api-wlfs54kbla-uc.a.run.app`
+**Live**: `https://theflockwatcher.com` (web) and `https://api.theflockwatcher.com` (API),
+both Cloudflare-proxied in front of Cloud Run. See "Domains and edge" below.
 
 The original plan was OCI (`VM.Standard.A1.Flex` Always Free) — that Terraform
 (`infra/terraform/{modules/{network,compute,storage},environments/prod}`) is left in place, not
@@ -162,6 +166,62 @@ docker compose up --build
 
 Brings up Postgres+PostGIS and the API on `:8080` (migrations run automatically on API
 startup). See `services/api/README.md` for endpoint details and a dev-login example.
+
+
+## Domains and edge (live)
+
+- `theflockwatcher.com` and `www` — the web app, Cloudflare-proxied in front of Cloud Run.
+- `api.theflockwatcher.com` — the API, same arrangement.
+
+Cloudflare sits in front for WAF, DDoS absorption, and to keep the Cloud Run
+origin off the public record. Getting there involved two dead ends worth
+recording so nobody repeats them:
+
+1. **Host Header Override is not on Cloudflare's free plan.** The original
+   plan was a proxied CNAME plus an Origin Rule rewriting the Host, which
+   would have avoided Google's domain verification entirely. The API returns
+   `not entitled to use the HostHeader override`. Cloud Run domain mappings
+   (and therefore Search Console verification) are required.
+2. **Certificates cannot be issued while Cloudflare proxies the record.**
+   Google validates by connecting to the domain; with the orange cloud on,
+   Cloudflare terminates TLS and the validation never reaches Cloud Run,
+   producing a persistent HTTP 525. Each hostname must be set to DNS-only
+   until its certificate is provisioned, then re-proxied.
+
+**Whenever an origin changes, more than DNS needs updating.** Two allowlists
+broke on the cutover, both failing in ways the server logs don't show:
+
+- **CORS** (`ALLOWED_ORIGIN`, a comma-separated list built from
+  `site_domain` in Terraform). A missing origin means every data request is
+  blocked in the browser while the server logs a clean 200.
+- **Google OAuth authorized JavaScript origins**, which are console-only on
+  a personal (non-org) account — `gcloud` cannot manage them. A missing
+  origin gives `Error 400: origin_mismatch` at sign-in.
+
+## Scheduled jobs
+
+Cloud Run Jobs on Cloud Scheduler, weekly:
+
+- `flockwatch-refresh-cameras` (Mon 04:00 UTC) — re-imports all 51
+  jurisdictions from Overpass. Idempotent, so re-runs update rather than
+  duplicate.
+- `flockwatch-derive-deployments` (Mon 06:00 UTC) — two hours later, so it
+  works from freshly imported operator tags.
+
+Jobs rather than a GitHub Actions cron specifically to keep the database
+credential in Secret Manager instead of copying it into a repo secret.
+
+## Record statuses
+
+`confirmed` means a moderator checked the record against a council report,
+contract, or FOIA response. `osm_documented` means OpenStreetMap
+contributors mapped the cameras and attributed them to that operator —
+real, citable, and **not** a public record.
+
+The distinction exists because ~1,150 records are OSM-derived and none have
+been verified. Publishing them as `confirmed` on a site titled "Public
+Records Atlas" would assert exactly the verification the project exists to
+provide. Anything derived starts `under_review` and only a human moves it.
 
 ## Rollout phases
 
