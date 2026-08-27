@@ -3,13 +3,18 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 // Config holds runtime configuration loaded from environment variables.
 type Config struct {
-	Port          string
-	DatabaseURL   string
-	JWTSecret     string
+	Port        string
+	DatabaseURL string
+	JWTSecret   string
+	// Comma-separated, because the site is reachable at more than one
+	// origin: the custom domain, its www form, and the Cloud Run URL the
+	// custom domain proxies to. A single origin here silently breaks every
+	// data request from the others.
 	AllowedOrigin string
 	Env           string
 	// GoogleClientID is the OAuth client the browser signs in against. It
@@ -27,6 +32,20 @@ func Load() Config {
 		Env:            getenv("ENV", "development"),
 		GoogleClientID: getenv("GOOGLE_CLIENT_ID", ""),
 	}
+}
+
+// AllowedOrigins splits ALLOWED_ORIGIN into the list CORS actually needs.
+// Blank entries are dropped so a trailing comma or stray whitespace in the
+// environment variable can't turn into an empty origin that matches
+// nothing (or, worse, is treated as a wildcard by a future change).
+func (c Config) AllowedOrigins() []string {
+	var out []string
+	for _, o := range strings.Split(c.AllowedOrigin, ",") {
+		if o = strings.TrimSpace(o); o != "" {
+			out = append(out, o)
+		}
+	}
+	return out
 }
 
 // DevAuthEnabled reports whether the /auth/dev-login stub should be mounted.

@@ -9,10 +9,15 @@ module "cloud_run" {
   jwt_secret       = var.jwt_secret
   google_client_id = var.google_client_id
 
-  # Point CORS at the deployed site rather than a hardcoded value, so the
-  # two can't drift apart. Terraform resolves the dependency order; a
-  # mismatch here means every browser request from the site is blocked.
-  allowed_origin = module.atlas.url
+  # Every origin the site is reachable from. The custom domain and its www
+  # form serve the same app, and the Cloud Run URL stays valid because the
+  # domain mapping proxies to it — omitting any of them silently blocks all
+  # data requests from that origin with no server-side error.
+  allowed_origin = join(",", compact([
+    module.atlas.url,
+    var.site_domain != "" ? "https://${var.site_domain}" : "",
+    var.site_domain != "" ? "https://www.${var.site_domain}" : "",
+  ]))
 }
 
 module "atlas" {

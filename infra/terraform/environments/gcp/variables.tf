@@ -60,3 +60,9 @@ variable "importer_image_digest" {
   type        = string
   description = "sha256:... digest of the published importer image. See modules/cloud-run/variables.tf for why a digest, not a tag."
 }
+
+variable "site_domain" {
+  type        = string
+  default     = ""
+  description = "Custom domain the site is served from. Empty means Cloud Run URLs only. Adding it here is what permits browser requests from that origin."
+}
