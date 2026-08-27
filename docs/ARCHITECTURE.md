@@ -138,13 +138,17 @@ ARM shortage that showed no sign of clearing. Pivoted to GCP:
   unlike OCI where Always Free genuinely cannot bill — not a cost concern as long as usage
   stays within free tier, just worth knowing going in.
 
-### Cloudflare — not currently planned for this path
+### Cloudflare — in front, as of the custom domain
 
-The earlier plan to front OCI with Cloudflare (WAF, DDoS absorption, hiding the origin IP) was
-specific to self-hosting on a VM with a public IP. Cloud Run already provides managed TLS and
-sits behind Google's own front-end infrastructure rather than exposing a raw origin IP, so the
-original rationale doesn't carry over directly — revisit if/when this needs edge-level
-rate limiting or WAF rules beyond what Cloud Run itself offers.
+An earlier revision of this document argued Cloudflare was unnecessary here: the plan to front
+OCI with it (WAF, DDoS absorption, hiding the origin IP) was specific to self-hosting on a VM
+with a public IP, and Cloud Run already terminates TLS behind Google's own front-end
+infrastructure without exposing a raw origin.
+
+That held for the bare `run.app` URL and was overtaken by owning a domain. The zone is
+registered at Cloudflare, so its DNS is authoritative regardless; proxying on top adds WAF and
+DDoS absorption in front of the write endpoints for no extra cost. See **Domains and edge
+(live)** below for the arrangement and the two dead ends hit along the way.
 
 ### Two parallel implementations exist in this repo — don't build on `apps/web`
 
@@ -210,6 +214,48 @@ Cloud Run Jobs on Cloud Scheduler, weekly:
 
 Jobs rather than a GitHub Actions cron specifically to keep the database
 credential in Secret Manager instead of copying it into a repo secret.
+
+## Observability
+
+**Alerting is on outcomes, not mechanisms.** The obvious way to alert on a
+weekly job is "tell me if the job didn't run", but Cloud Monitoring caps
+`condition_absent` durations at 23h30m, so a weekly schedule can't be
+expressed that way at all. The better check turned out to be the one that
+survives the constraint: `GET /health/data` reports the age of the newest
+import and returns 503 past nine days, and an uptime check watches it. That
+catches the job failing, the job succeeding while importing nothing, and
+Overpass quietly returning empty results — none of which "the job ran" would
+have caught.
+
+`/health/data` is deliberately separate from `/health`. The service can be
+perfectly healthy while the data it serves is a month stale, and those two
+failures need different alerts and different responses.
+
+Measuring this required adding `camera_sightings.updated_at`. `created_at`
+cannot answer the question: a refresh mostly UPDATEs existing rows, so
+`created_at` stays pinned to the original import and healthy data would look
+ancient. A check that fires constantly gets muted, which is worse than not
+having one.
+
+**Logging is structured for where it lands.** Cloud Run captures stdout;
+Cloud Logging parses a line into a queryable entry only if it's JSON with the
+field names it expects. Two of those are easy to get subtly wrong, and
+neither fails loudly:
+
+- The message must be under `message`. slog's default `msg` is kept as an
+  ordinary payload field, so every entry displays blank in the console.
+- Severity must be `WARNING`. slog emits `WARN`, which is silently
+  downgraded to DEFAULT and won't match a `severity>=WARNING` filter.
+
+Handlers return a message written for an anonymous caller and log the real
+cause separately, with the route and request ID. Before this, eighteen 5xx
+sites discarded the error entirely — the 5xx alert could fire with nothing
+behind it to look at. pgx errors also carry table and column names, so the
+split is a disclosure boundary as much as a debugging one.
+
+Not Sentry or similar: one service, already inside GCP, and Error Reporting
+groups these entries as-is. No extra vendor, no secret to rotate, nothing new
+that can itself go down. Worth revisiting if this ever runs elsewhere.
 
 ## Record statuses
 
