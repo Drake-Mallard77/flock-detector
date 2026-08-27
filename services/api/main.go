@@ -4,7 +4,7 @@ import (
 	"context"
 	"embed"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,8 +21,9 @@ var migrationsFS embed.FS
 
 func main() {
 	cfg := config.Load()
+	httpapi.SetupLogging(cfg.Env)
 	if err := cfg.RequireSecureSecrets(); err != nil {
-		log.Fatal(err)
+		fatal("refusing to start", err)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -30,12 +31,12 @@ func main() {
 
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("connect to database: %v", err)
+		fatal("connect to database", err)
 	}
 	defer pool.Close()
 
 	if err := db.Migrate(ctx, pool, migrationsFS, "migrations"); err != nil {
-		log.Fatalf("run migrations: %v", err)
+		fatal("run migrations", err)
 	}
 
 	server := httpapi.NewServer(pool, cfg)
@@ -47,18 +48,28 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("flockwatch api listening on :%s (env=%s)", cfg.Port, cfg.Env)
+		slog.Info("flockwatch api listening", "port", cfg.Port, "env", cfg.Env)
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("http server: %v", err)
+			fatal("http server", err)
 		}
 	}()
 
 	<-ctx.Done()
-	log.Println("shutting down...")
+	slog.Info("shutting down")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		log.Printf("graceful shutdown failed: %v", err)
+		slog.Error("graceful shutdown failed", "error", err)
 	}
+}
+
+// fatal reports a startup failure through the same structured pipeline as
+// everything else, then exits. log.Fatal wrote plain text, which on Cloud
+// Run means a crash-looping container produces log entries with no severity
+// — they don't match an error filter and don't raise an alert, so the
+// service can be down and quiet at the same time.
+func fatal(msg string, err error) {
+	slog.Error(msg, "error", err)
+	os.Exit(1)
 }

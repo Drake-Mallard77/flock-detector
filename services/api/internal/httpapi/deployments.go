@@ -65,7 +65,7 @@ func (s *Server) handleListDeployments(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.db.Query(r.Context(), sql,
 		q.Get("state"), q.Get("status"), q.Get("city"), limit, offset, search)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "query failed")
+		serverError(w, r, http.StatusInternalServerError, "could not load deployments", err)
 		return
 	}
 	defer rows.Close()
@@ -74,7 +74,7 @@ func (s *Server) handleListDeployments(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		d, err := scanDeployment(rows)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "scan failed")
+			serverError(w, r, http.StatusInternalServerError, "could not load deployments", err)
 			return
 		}
 		deployments = append(deployments, d)
@@ -152,7 +152,7 @@ func (s *Server) handleCreateDeployment(w http.ResponseWriter, r *http.Request) 
 	`, req.AgencyName, req.City, req.State, req.County, req.Lat, req.Lng,
 		req.DocumentedUnits, req.EvidenceType, req.SourceLinks, req.Notes).Scan(&id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "insert failed")
+		serverError(w, r, http.StatusInternalServerError, "could not save your submission", err)
 		return
 	}
 

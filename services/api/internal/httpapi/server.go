@@ -31,8 +31,8 @@ func (s *Server) Router() http.Handler {
 
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
+	r.Use(requestLogger)
+	r.Use(recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   s.cfg.AllowedOrigins(),
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "OPTIONS"},

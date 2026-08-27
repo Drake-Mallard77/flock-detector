@@ -89,7 +89,7 @@ func (rl *submissionRateLimiter) middleware(next http.Handler) http.Handler {
 			// the database anyway — allowing it through on a database error
 			// would only defer the failure while removing the flood control
 			// at exactly the moment things are already going wrong.
-			writeError(w, http.StatusServiceUnavailable, "submissions are temporarily unavailable")
+			serverError(w, r, http.StatusServiceUnavailable, "submissions are temporarily unavailable", err)
 			return
 		}
 		if !allowed {

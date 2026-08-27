@@ -25,7 +25,7 @@ func (s *Server) handleDataFreshness(w http.ResponseWriter, r *http.Request) {
 		`SELECT max(updated_at) FROM camera_sightings WHERE source = 'osm_import'`,
 	).Scan(&newest)
 	if err != nil {
-		writeError(w, http.StatusServiceUnavailable, "could not determine data freshness")
+		serverError(w, r, http.StatusServiceUnavailable, "could not determine data freshness", err)
 		return
 	}
 	if newest == nil {

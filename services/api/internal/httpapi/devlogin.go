@@ -34,13 +34,13 @@ func (s *Server) handleDevLogin(w http.ResponseWriter, r *http.Request) {
 		RETURNING id
 	`, req.Email, req.Role).Scan(&userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "could not create/find user")
+		serverError(w, r, http.StatusInternalServerError, "could not create/find user", err)
 		return
 	}
 
 	token, err := s.issueToken(userID, req.Role)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "could not issue token")
+		serverError(w, r, http.StatusInternalServerError, "could not issue token", err)
 		return
 	}
 

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -34,6 +35,7 @@ func (s *Server) handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.GoogleClientID == "" {
 		// Fail closed: without a client ID there is no audience to check,
 		// so any Google-issued token would otherwise be accepted.
+		slog.WarnContext(r.Context(), "Google sign-in attempted but GOOGLE_CLIENT_ID is not set")
 		writeError(w, http.StatusServiceUnavailable, "Google sign-in is not configured on this server")
 		return
 	}
@@ -77,13 +79,13 @@ func (s *Server) handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 		RETURNING id, role
 	`, email).Scan(&userID, &role)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "could not sign you in")
+		serverError(w, r, http.StatusInternalServerError, "could not sign you in", err)
 		return
 	}
 
 	token, err := s.issueToken(userID, role)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "could not issue token")
+		serverError(w, r, http.StatusInternalServerError, "could not issue token", err)
 		return
 	}
 

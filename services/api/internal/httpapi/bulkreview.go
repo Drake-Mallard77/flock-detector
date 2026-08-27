@@ -63,7 +63,7 @@ func (s *Server) handleBulkReviewDeployments(w http.ResponseWriter, r *http.Requ
 		WHERE id = ANY($3)
 	`, req.Status, reviewerID, req.IDs)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "bulk update failed")
+		serverError(w, r, http.StatusInternalServerError, "could not apply the bulk review", err)
 		return
 	}
 

@@ -73,7 +73,7 @@ func (s *Server) handleListCameras(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.db.Query(r.Context(), sql, hasBBox, west, south, east, north,
 		source, status, manufacturer, manufacturerUnknown)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "query failed")
+		serverError(w, r, http.StatusInternalServerError, "could not load cameras", err)
 		return
 	}
 	defer rows.Close()
@@ -87,7 +87,7 @@ func (s *Server) handleListCameras(w http.ResponseWriter, r *http.Request) {
 			&c.ExternalID, &c.State,
 			&c.CreatedBy, &c.CreatedAt,
 		); err != nil {
-			writeError(w, http.StatusInternalServerError, "scan failed")
+			serverError(w, r, http.StatusInternalServerError, "could not load cameras", err)
 			return
 		}
 		cameras = append(cameras, c)
@@ -109,7 +109,7 @@ func (s *Server) handleListManufacturers(w http.ResponseWriter, r *http.Request)
 		ORDER BY count(*) DESC, manufacturer ASC
 	`)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "query failed")
+		serverError(w, r, http.StatusInternalServerError, "could not load cameras", err)
 		return
 	}
 	defer rows.Close()
@@ -123,7 +123,7 @@ func (s *Server) handleListManufacturers(w http.ResponseWriter, r *http.Request)
 	for rows.Next() {
 		var m manufacturerCount
 		if err := rows.Scan(&m.Manufacturer, &m.Count); err != nil {
-			writeError(w, http.StatusInternalServerError, "scan failed")
+			serverError(w, r, http.StatusInternalServerError, "could not load cameras", err)
 			return
 		}
 		out = append(out, m)
@@ -162,7 +162,7 @@ func (s *Server) handleCreateCamera(w http.ResponseWriter, r *http.Request) {
 		) RETURNING id
 	`, req.DeploymentID, req.Lng, req.Lat, req.Direction, req.CameraType, req.PhotoURL).Scan(&id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "insert failed")
+		serverError(w, r, http.StatusInternalServerError, "could not save your sighting", err)
 		return
 	}
 
