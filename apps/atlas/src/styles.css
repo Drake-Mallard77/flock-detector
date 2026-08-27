@@ -11,6 +11,11 @@
   --border: #e2e2df;
   --text: #1a1a18;
   --text-muted: #6b6b66;
+  --brand: #0b6e99;
+  --brand-strong: #075985;
+  --brand-soft: #e0f2fe;
+  --brand-ring: rgba(11, 110, 153, 0.35);
+
   --accent: #2c3e50;
   /* Text/icons drawn on top of --accent. */
   --on-accent: #ffffff;
@@ -47,6 +52,11 @@
   --border: #33363c;
   --text: #e8e8e4;
   --text-muted: #9a9a94;
+  --brand: #7dd3fc;
+  --brand-strong: #bae6fd;
+  --brand-soft: #0c4a6e;
+  --brand-ring: rgba(125, 211, 252, 0.4);
+
   --accent: #8fb3d9;
   /* Dark text on the now-light accent, so buttons stay legible. */
   --on-accent: #10161d;
@@ -77,6 +87,11 @@
     --border: #33363c;
     --text: #e8e8e4;
     --text-muted: #9a9a94;
+    --brand: #7dd3fc;
+    --brand-strong: #bae6fd;
+    --brand-soft: #0c4a6e;
+    --brand-ring: rgba(125, 211, 252, 0.4);
+
     --accent: #8fb3d9;
     --on-accent: #10161d;
 
@@ -815,4 +830,155 @@ button.primary:disabled {
    distinctly from confirmed so the difference is visible at a glance. */
 .status-osm_documented {
   color: var(--status-review);
+}
+
+/* ---------------------------------------------------------------------
+   Colour accents.
+
+   Applied to chrome — header, focus states, controls — and deliberately
+   not to the data. Records and map pins keep their status colours, so
+   colour on this site still means something rather than being decoration.
+   --------------------------------------------------------------------- */
+
+/* A brand stripe across the top. Gives the page an identity without
+   tinting the content beneath it. */
+.site-header {
+  border-top: 3px solid var(--brand);
+  /* The tint runs the full height rather than fading out after 2.5rem,
+     which was so faint in light mode it read as a rendering artefact. */
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--brand-soft) 90%, var(--bg)),
+    var(--bg)
+  );
+}
+
+.brand {
+  color: var(--brand-strong);
+}
+
+.brand small {
+  color: var(--brand);
+  opacity: 0.85;
+}
+
+/* The current page is marked with the brand colour and a rule beneath it,
+   so it doesn't rely on a subtle weight change alone. */
+.site-nav a[aria-current="page"] {
+  color: var(--brand-strong);
+  border-bottom: 2px solid var(--brand);
+  padding-bottom: 0.1rem;
+}
+
+.site-nav .cta {
+  border-color: var(--brand);
+  color: var(--brand-strong);
+  font-weight: 550;
+}
+
+.site-nav .cta:hover {
+  background: var(--brand);
+  color: var(--on-accent);
+}
+
+/* Visible focus everywhere, in the brand colour. Keyboard users had only
+   the browser default, which several of these controls suppressed. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.place-search input:focus,
+.map-filters select:focus,
+.filters input:focus,
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-ring);
+  outline: none;
+}
+
+/* Search reads as the primary action on the map rather than one more
+   grey box among the filters. */
+.place-search input {
+  border-color: var(--brand);
+}
+
+.map-filters label span,
+.filters button[aria-pressed="true"] {
+  /* Filter labels pick up the brand tint; the active pill already
+     inverts, so only the label needs it. */
+}
+
+.map-filters label span {
+  color: var(--brand-strong);
+}
+
+button.primary {
+  background: var(--brand);
+  color: var(--on-accent);
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--brand-strong);
+}
+
+.filters button[aria-pressed="true"] {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--on-accent);
+}
+
+/* Map cluster bubbles in the brand colour, so the map chrome matches the
+   site while individual camera pins keep their own (green) meaning. */
+.marker-cluster {
+  background: var(--brand-ring);
+}
+
+.marker-cluster div {
+  background: var(--brand);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+/* Panels floating over the map get a brand edge to lift them off it. */
+.map-filters,
+.map-legend {
+  border-top: 2px solid var(--brand);
+}
+
+.map-legend h2 {
+  color: var(--brand-strong);
+}
+
+/* Status chips become filled rather than outline-only, so status is
+   readable at a glance in a long list instead of needing to be read. */
+.status {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+  font-weight: 600;
+}
+
+/* Table headers pick up the brand tint. */
+.records th {
+  color: var(--brand-strong);
+  background: var(--bg-subtle);
+}
+
+.records a {
+  color: var(--brand-strong);
+}
+
+/* Section headings in long-form pages. */
+.prose h2 {
+  color: var(--brand-strong);
+}
+
+.review-bulk {
+  border-left: 3px solid var(--brand);
 }

@@ -1,60 +1,113 @@
 package httpapi
 
 import (
+	"context"
+	"errors"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
-
-	"golang.org/x/time/rate"
 )
 
-func TestSubmissionRateLimiter_AllowsBurstThenBlocks(t *testing.T) {
-	rl := newSubmissionRateLimiter(rate.Limit(1.0/60.0), 3, time.Minute)
+// stubDB stands in for Postgres so the limiter's own logic can be tested
+// without a database.
+type stubDB struct {
+	count int
+	err   error
+	calls int
+}
 
-	for i := 0; i < 3; i++ {
-		if !rl.allow("192.0.2.1") {
-			t.Fatalf("request %d within burst should be allowed", i)
+type stubRow struct {
+	count int
+	err   error
+}
+
+func (r stubRow) Scan(dest ...any) error {
+	if r.err != nil {
+		return r.err
+	}
+	if p, ok := dest[0].(*int); ok {
+		*p = r.count
+	}
+	return nil
+}
+
+func (s *stubDB) QueryRow(_ context.Context, _ string, _ ...any) rowScanner {
+	s.calls++
+	if s.err != nil {
+		return stubRow{err: s.err}
+	}
+	s.count++
+	return stubRow{count: s.count}
+}
+
+func TestRateLimiter_AllowsUpToMax(t *testing.T) {
+	db := &stubDB{}
+	rl := newSubmissionRateLimiter(db, time.Minute, 3)
+
+	for i := 1; i <= 3; i++ {
+		ok, err := rl.allow(context.Background(), "192.0.2.1")
+		if err != nil || !ok {
+			t.Fatalf("request %d should be allowed (ok=%v err=%v)", i, ok, err)
 		}
 	}
-	if rl.allow("192.0.2.1") {
-		t.Fatal("4th request beyond burst should be blocked")
+	ok, err := rl.allow(context.Background(), "192.0.2.1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-
-	// A different IP has its own independent bucket.
-	if !rl.allow("192.0.2.2") {
-		t.Fatal("a different IP should not be affected by another IP's rate limit")
+	if ok {
+		t.Error("the request past the limit should be refused")
 	}
 }
 
-func TestSubmissionRateLimiter_MiddlewareReturns429(t *testing.T) {
-	s := newTestServer(t)
-	s.submissionLimiter = newSubmissionRateLimiter(rate.Limit(1.0/60.0), 1, time.Minute)
-	h := s.Router()
+// A database failure must not open the gate. These are write endpoints, so
+// the request needs the database regardless — allowing it through would
+// only defer the failure while dropping the flood control at the moment
+// things are already going wrong.
+func TestRateLimiter_FailsClosed(t *testing.T) {
+	db := &stubDB{err: errors.New("connection refused")}
+	rl := newSubmissionRateLimiter(db, time.Minute, 10)
 
-	// First submission consumes the single burst slot.
-	rec := doJSON(t, h, http.MethodPost, "/deployments", map[string]any{
-		"agency_name": "Agency A", "city": "Springfield", "state": "IL",
-		"evidence_type": "council_report",
-	}, "")
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("first submission: expected 201, got %d: %s", rec.Code, rec.Body.String())
+	ok, err := rl.allow(context.Background(), "192.0.2.1")
+	if err == nil {
+		t.Fatal("expected the database error to surface")
+	}
+	if ok {
+		t.Error("must not allow the request when the limiter cannot check")
 	}
 
-	// Second submission from the same IP should be rate limited.
-	rec = doJSON(t, h, http.MethodPost, "/deployments", map[string]any{
-		"agency_name": "Agency B", "city": "Springfield", "state": "IL",
-		"evidence_type": "council_report",
-	}, "")
+	rec := doRequest(t, rl.middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 when the limiter is unavailable, got %d", rec.Code)
+	}
+}
+
+func TestRateLimiter_Middleware429(t *testing.T) {
+	db := &stubDB{}
+	rl := newSubmissionRateLimiter(db, time.Minute, 1)
+	h := rl.middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	if rec := doRequest(t, h); rec.Code != http.StatusOK {
+		t.Fatalf("first request: expected 200, got %d", rec.Code)
+	}
+	rec := doRequest(t, h)
 	if rec.Code != http.StatusTooManyRequests {
-		t.Fatalf("second submission: expected 429, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("second request: expected 429, got %d", rec.Code)
 	}
 	if rec.Header().Get("Retry-After") == "" {
-		t.Error("expected a Retry-After header on a 429 response")
+		t.Error("a 429 should tell the caller when to retry")
 	}
+}
 
-	// GET requests are not rate limited by the submission limiter.
-	rec = doJSON(t, h, http.MethodGet, "/deployments", nil, "")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET should be unaffected by the submission rate limit, got %d", rec.Code)
-	}
+func doRequest(t *testing.T, h http.Handler) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/deployments", nil)
+	req.RemoteAddr = "192.0.2.1:12345"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
 }

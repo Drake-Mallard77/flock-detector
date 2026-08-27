@@ -1,89 +1,99 @@
 package httpapi
 
 import (
+	"context"
 	"net"
 	"net/http"
-	"sync"
 	"time"
 
-	"golang.org/x/time/rate"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// submissionRateLimiter throttles write endpoints per client IP. This exists
-// primarily as a data-integrity control, not a performance one: the main
-// threat against a crowdsourced public-records site is someone flooding it
-// with fake/defamatory submissions to discredit or dilute the dataset, not
-// server load. Every submission still requires moderator approval before it
-// becomes public, but a flood still burns moderator time and can be used to
-// bury real reports, so it's throttled at the door too.
+// Submission limits, per client IP per window.
 //
-// State is an in-memory map, which is correct for the single-VM deployment
-// this project targets (see docs/ARCHITECTURE.md). If the API is ever
-// horizontally scaled, this needs to move to a shared store (e.g. Redis) or
-// each instance only sees a fraction of a given IP's traffic.
+// Deliberately generous for a person and restrictive for a script: filing
+// twenty sourced records in ten minutes by hand is implausible, while a
+// flood attempt hits it almost immediately.
+const (
+	rateLimitWindow = 10 * time.Minute
+	rateLimitMax    = 20
+)
+
+// submissionRateLimiter throttles write endpoints per client IP.
+//
+// This is a data-integrity control, not a performance one. The main threat
+// against a crowdsourced public-records site is someone flooding it with
+// fabricated or defamatory submissions to dilute or discredit the dataset.
+// Every submission still needs moderator approval before it goes public,
+// but a flood burns moderator attention and can bury real reports, so it's
+// throttled at the door as well.
+//
+// State lives in Postgres so the limit holds across Cloud Run instances.
+// The previous in-memory version gave each instance its own counters, so
+// the real limit was max_instance_count times the intended one.
 type submissionRateLimiter struct {
-	mu       sync.Mutex
-	limiters map[string]*visitorLimiter
-
-	rate  rate.Limit
-	burst int
+	db     dbExecutor
+	window time.Duration
+	max    int
 }
 
-type visitorLimiter struct {
-	limiter  *rate.Limiter
-	lastSeen time.Time
+// dbExecutor is the slice of pgxpool.Pool this needs, so tests can supply a
+// stub without standing up a pool.
+type dbExecutor interface {
+	QueryRow(ctx context.Context, sql string, args ...any) rowScanner
 }
 
-// newSubmissionRateLimiter allows `burst` immediate requests per IP, then
-// refills at `r` events/sec. It starts a background goroutine that evicts
-// entries idle for longer than staleAfter, so long-running processes don't
-// accumulate unbounded memory from one-off/rotating client IPs.
-func newSubmissionRateLimiter(r rate.Limit, burst int, staleAfter time.Duration) *submissionRateLimiter {
-	rl := &submissionRateLimiter{
-		limiters: make(map[string]*visitorLimiter),
-		rate:     r,
-		burst:    burst,
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func newSubmissionRateLimiter(db dbExecutor, window time.Duration, max int) *submissionRateLimiter {
+	return &submissionRateLimiter{db: db, window: window, max: max}
+}
+
+// allow records a hit and reports whether the caller is still under the
+// limit, using a fixed window.
+//
+// A fixed window can let up to 2x the limit through across a boundary. That
+// is a known and accepted tradeoff here: it's a flood control, not a
+// billing meter, and a sliding window costs more complexity than the
+// precision is worth.
+func (rl *submissionRateLimiter) allow(ctx context.Context, ip string) (bool, error) {
+	windowStart := time.Now().UTC().Truncate(rl.window)
+
+	var count int
+	err := rl.db.QueryRow(ctx, `
+		INSERT INTO rate_limits (key, window_start, count)
+		VALUES ($1, $2, 1)
+		ON CONFLICT (key) DO UPDATE SET
+			count = CASE
+				WHEN rate_limits.window_start = EXCLUDED.window_start
+				THEN rate_limits.count + 1
+				ELSE 1
+			END,
+			window_start = EXCLUDED.window_start
+		RETURNING count
+	`, ip, windowStart).Scan(&count)
+	if err != nil {
+		return false, err
 	}
-	go rl.cleanupLoop(staleAfter)
-	return rl
+
+	return count <= rl.max, nil
 }
 
-func (rl *submissionRateLimiter) allow(ip string) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	v, ok := rl.limiters[ip]
-	if !ok {
-		v = &visitorLimiter{limiter: rate.NewLimiter(rl.rate, rl.burst)}
-		rl.limiters[ip] = v
-	}
-	v.lastSeen = time.Now()
-	return v.limiter.Allow()
-}
-
-func (rl *submissionRateLimiter) cleanupLoop(staleAfter time.Duration) {
-	ticker := time.NewTicker(staleAfter)
-	defer ticker.Stop()
-	for range ticker.C {
-		cutoff := time.Now().Add(-staleAfter)
-		rl.mu.Lock()
-		for ip, v := range rl.limiters {
-			if v.lastSeen.Before(cutoff) {
-				delete(rl.limiters, ip)
-			}
-		}
-		rl.mu.Unlock()
-	}
-}
-
-// middleware rejects requests over the limit with 429 + Retry-After. It
-// keys on RemoteAddr, which by this point in the chain reflects the real
-// client IP via middleware.RealIP (see server.go's middleware order).
 func (rl *submissionRateLimiter) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := clientIP(r)
-		if !rl.allow(ip) {
-			w.Header().Set("Retry-After", "10")
+		allowed, err := rl.allow(r.Context(), clientIP(r))
+		if err != nil {
+			// Fail closed. These are write endpoints, so the request needs
+			// the database anyway — allowing it through on a database error
+			// would only defer the failure while removing the flood control
+			// at exactly the moment things are already going wrong.
+			writeError(w, http.StatusServiceUnavailable, "submissions are temporarily unavailable")
+			return
+		}
+		if !allowed {
+			w.Header().Set("Retry-After", "600")
 			writeError(w, http.StatusTooManyRequests, "too many submissions, please slow down")
 			return
 		}
@@ -98,4 +108,13 @@ func clientIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+// pgxAdapter bridges *pgxpool.Pool to dbExecutor. pgx's QueryRow returns a
+// concrete pgx.Row, so it doesn't satisfy the interface directly; wrapping
+// keeps the limiter testable without importing pgx into its tests.
+type pgxAdapter struct{ pool *pgxpool.Pool }
+
+func (a pgxAdapter) QueryRow(ctx context.Context, sql string, args ...any) rowScanner {
+	return a.pool.QueryRow(ctx, sql, args...)
 }

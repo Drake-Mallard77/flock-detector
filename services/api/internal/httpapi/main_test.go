@@ -9,7 +9,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"golang.org/x/time/rate"
 
 	"flockwatch/api/internal/config"
 	"flockwatch/api/internal/db"
@@ -63,7 +62,7 @@ func TestMain(m *testing.M) {
 func resetDB(t *testing.T) {
 	t.Helper()
 	_, err := testPool.Exec(context.Background(),
-		`TRUNCATE camera_sightings, deployments, users RESTART IDENTITY CASCADE`)
+		`TRUNCATE camera_sightings, deployments, users, rate_limits RESTART IDENTITY CASCADE`)
 	if err != nil {
 		t.Fatalf("truncate tables: %v", err)
 	}
@@ -82,6 +81,10 @@ func newTestServer(t *testing.T) *Server {
 			AllowedOrigin: "http://localhost:5173",
 			Env:           "development",
 		},
-		submissionLimiter: newSubmissionRateLimiter(rate.Limit(1000), 1000, time.Minute),
+		// Backed by the real test database, so handler tests exercise the
+		// actual limiter SQL. The ceiling is high because these tests are
+		// about handler behaviour, not throttling — the limiter's own logic
+		// is covered in ratelimit_test.go.
+		submissionLimiter: newSubmissionRateLimiter(pgxAdapter{testPool}, time.Minute, 100000),
 	}
 }

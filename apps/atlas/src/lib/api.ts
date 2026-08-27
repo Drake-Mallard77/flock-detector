@@ -4,7 +4,7 @@
 // packages/shared-types if/when this needs to be shared with the mobile app.
 
 const API_BASE =
-  import.meta.env.VITE_API_BASE ?? "https://flockwatch-api-wlfs54kbla-uc.a.run.app";
+  import.meta.env.VITE_API_BASE ?? "https://api.theflockwatcher.com";
 
 export type DeploymentStatus =
   | "confirmed"

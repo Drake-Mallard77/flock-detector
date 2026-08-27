@@ -53,3 +53,17 @@ module "jobs" {
   database_url_secret_id = module.cloud_run.database_url_secret_id
   service_account_email  = module.cloud_run.runtime_service_account
 }
+
+# Alerting and uptime checks. Every failure mode this project has is quiet:
+# a failed weekly import keeps serving last week's data, and a broken
+# endpoint returns a clean 200 to the logs while failing in the browser.
+module "monitoring" {
+  source = "../../modules/monitoring"
+
+  project_id  = var.project_id
+  region      = var.region
+  alert_email = var.alert_email
+
+  site_url = var.site_domain != "" ? "https://${var.site_domain}" : module.atlas.url
+  api_url  = var.site_domain != "" ? "https://api.${var.site_domain}" : module.cloud_run.url
+}

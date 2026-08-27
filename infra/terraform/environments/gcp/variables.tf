@@ -66,3 +66,8 @@ variable "site_domain" {
   default     = ""
   description = "Custom domain the site is served from. Empty means Cloud Run URLs only. Adding it here is what permits browser requests from that origin."
 }
+
+variable "alert_email" {
+  type        = string
+  description = "Address that receives alerts for failed scheduled jobs, downtime, and API errors."
+}

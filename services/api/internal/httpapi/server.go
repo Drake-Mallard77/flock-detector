@@ -3,24 +3,13 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/time/rate"
 
 	"flockwatch/api/internal/config"
-)
-
-// submissionRate/submissionBurst bound public write endpoints: 3 immediate
-// requests per IP, refilling at 1 every 10s. See ratelimit.go for why this
-// is treated as a data-integrity control, not just abuse prevention.
-const (
-	submissionRate       = rate.Limit(1.0 / 10.0)
-	submissionBurst      = 3
-	submissionStaleAfter = 10 * time.Minute
 )
 
 type Server struct {
@@ -33,7 +22,7 @@ func NewServer(db *pgxpool.Pool, cfg config.Config) *Server {
 	return &Server{
 		db:                db,
 		cfg:               cfg,
-		submissionLimiter: newSubmissionRateLimiter(submissionRate, submissionBurst, submissionStaleAfter),
+		submissionLimiter: newSubmissionRateLimiter(pgxAdapter{db}, rateLimitWindow, rateLimitMax),
 	}
 }
 
