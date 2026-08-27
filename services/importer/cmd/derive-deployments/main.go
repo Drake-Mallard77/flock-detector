@@ -24,13 +24,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"flockwatch/importer/internal/derive"
+	"flockwatch/importer/internal/importer"
 	"flockwatch/importer/internal/overpass"
 )
 
 func main() {
 	var (
-		dryRun = flag.Bool("dry-run", false, "report candidates without writing them")
-		limit  = flag.Int("limit", 0, "stop after N candidates (0 = no limit)")
+		dryRun     = flag.Bool("dry-run", false, "report candidates without writing them")
+		reclassify = flag.Bool("reclassify", false, "recompute operator_type on pending candidates, then exit")
+		limit      = flag.Int("limit", 0, "stop after N candidates (0 = no limit)")
 	)
 	flag.Parse()
 
@@ -47,6 +49,17 @@ func main() {
 		log.Fatalf("connect: %v", err)
 	}
 	defer pool.Close()
+
+	if *reclassify {
+		n, err := derive.ReclassifyPending(ctx, pool, func(name string) string {
+			return string(importer.ClassifyOperator(name))
+		})
+		if err != nil {
+			log.Fatalf("reclassify: %v", err)
+		}
+		log.Printf("reclassified %d pending candidate(s)", n)
+		return
+	}
 
 	candidates, err := derive.FindCandidates(ctx, pool)
 	if err != nil {

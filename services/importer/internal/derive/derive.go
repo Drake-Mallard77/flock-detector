@@ -129,3 +129,58 @@ func Create(ctx context.Context, pool *pgxpool.Pool, c Candidate, city string) (
 	}
 	return true, nil
 }
+
+// ReclassifyPending recomputes operator_type for candidates still awaiting
+// review.
+//
+// Create() deliberately never touches an existing record, so improvements
+// to the classifier would otherwise only reach records derived afterwards.
+// This is scoped to status='under_review' AND evidence_type='osm_import':
+// a record a moderator has already confirmed, disputed, or removed is their
+// judgement, not something a later heuristic change should quietly rewrite.
+func ReclassifyPending(ctx context.Context, pool *pgxpool.Pool,
+	classify func(string) string) (updated int, err error) {
+
+	rows, err := pool.Query(ctx, `
+		SELECT id, agency_name, operator_type
+		FROM deployments
+		WHERE status = 'under_review' AND evidence_type = 'osm_import'
+	`)
+	if err != nil {
+		return 0, fmt.Errorf("load pending: %w", err)
+	}
+
+	type change struct {
+		id   string
+		kind string
+	}
+	var changes []change
+
+	for rows.Next() {
+		var id, agency string
+		var current *string
+		if err := rows.Scan(&id, &agency, &current); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("scan pending: %w", err)
+		}
+		next := classify(agency)
+		if current == nil || *current != next {
+			changes = append(changes, change{id: id, kind: next})
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	for _, c := range changes {
+		if _, err := pool.Exec(ctx,
+			`UPDATE deployments SET operator_type = $1, updated_at = now() WHERE id = $2`,
+			c.kind, c.id,
+		); err != nil {
+			return updated, fmt.Errorf("update %s: %w", c.id, err)
+		}
+		updated++
+	}
+	return updated, nil
+}

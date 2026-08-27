@@ -44,6 +44,19 @@ var operatorPatterns = []struct {
 	}},
 }
 
+// Well-known commercial operators that carry no corporate suffix in the
+// tags. Listing them isn't guesswork — these are unambiguously companies,
+// and they recur across many states, so leaving them "unclassified" adds
+// review effort for no benefit. Anything not listed still falls through to
+// "unknown" rather than being assumed private.
+var privateBrands = []string{
+	"lowe's", "lowes", "the home depot", "home depot", "walmart", "wal-mart",
+	"target", "costco", "kroger", "wegmans", "wegmans food markets",
+	"publix", "safeway", "albertsons", "meijer", "heb", "h-e-b",
+	"whole foods", "trader joe's", "aldi", "cvs", "walgreens",
+	"ups", "fedex", "amazon", "kaiser permanente", "tanger",
+}
+
 // Suffixes that mark a company rather than a public body.
 var privateMarkers = []string{
 	"inc.", "inc", "llc", "l.l.c.", "corp", "corporation", "company",
@@ -70,6 +83,12 @@ func ClassifyOperator(operator string) OperatorType {
 			if strings.Contains(name, kw) {
 				return p.kind
 			}
+		}
+	}
+
+	for _, brand := range privateBrands {
+		if name == brand {
+			return OperatorPrivate
 		}
 	}
 
