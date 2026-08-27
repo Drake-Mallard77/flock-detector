@@ -45,6 +45,10 @@ func (s *Server) Router() http.Handler {
 	// they reach the container — confirmed while deploying to Cloud Run,
 	// see docs/ARCHITECTURE.md.
 	r.Get("/health", s.handleHealth)
+	// Separate from /health on purpose: the service can be perfectly
+	// healthy while the data it serves is weeks out of date, and those
+	// warrant different alerts and different responses.
+	r.Get("/health/data", s.handleDataFreshness)
 
 	r.Route("/deployments", func(r chi.Router) {
 		r.Get("/", s.handleListDeployments)

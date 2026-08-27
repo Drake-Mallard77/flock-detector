@@ -69,26 +69,62 @@ resource "google_monitoring_alert_policy" "job_failed" {
 
 # The inverse failure: the scheduler stops firing at all, so nothing fails
 # because nothing runs. A job-failure alert cannot catch that.
-resource "google_monitoring_alert_policy" "import_stale" {
+#
+# The obvious approach — alert on absence of the job metric — is not
+# expressible: Cloud Monitoring caps metric-absence conditions at 23h30m and
+# this job runs weekly. Measuring the outcome is better anyway. A job can run,
+# report success, and still import nothing; what matters is whether the
+# records are current. /health/data returns 503 once the newest import is
+# older than nine days, and the uptime check below alerts on that.
+resource "google_monitoring_uptime_check_config" "data_freshness" {
   project      = var.project_id
-  display_name = "Weekly import has not run"
+  display_name = "FlockWatch data freshness"
+  timeout      = "10s"
+  # Hourly rather than every five minutes: this measures a weekly job, so
+  # tighter polling adds noise and cost without detecting anything sooner.
+  period = "900s"
+
+  http_check {
+    path         = "/health/data"
+    port         = 443
+    use_ssl      = true
+    validate_ssl = true
+  }
+
+  monitored_resource {
+    type = "uptime_url"
+    labels = {
+      project_id = var.project_id
+      host       = replace(replace(var.api_url, "https://", ""), "/", "")
+    }
+  }
+}
+
+resource "google_monitoring_alert_policy" "data_stale" {
+  project      = var.project_id
+  display_name = "Camera data is stale"
   combiner     = "OR"
 
   conditions {
-    display_name = "No completed job task in 9 days"
+    display_name = "Freshness check failing"
 
-    condition_absent {
+    condition_threshold {
       filter = join(" AND ", [
-        "resource.type = \"cloud_run_job\"",
-        "metric.type = \"run.googleapis.com/job/completed_task_attempt_count\"",
+        "resource.type = \"uptime_url\"",
+        "metric.type = \"monitoring.googleapis.com/uptime_check/check_passed\"",
+        "metric.label.check_id = \"${google_monitoring_uptime_check_config.data_freshness.uptime_check_id}\"",
       ])
-      # Nine days: longer than the weekly cadence plus a missed run, short
-      # enough to notice well before the data is meaningfully stale.
-      duration = "777600s"
+      comparison      = "COMPARISON_LT"
+      threshold_value = 1
+      # An hour of consecutive failures, so a transient API blip doesn't
+      # read as stale data.
+      duration = "3600s"
 
       aggregations {
-        alignment_period   = "3600s"
-        per_series_aligner = "ALIGN_SUM"
+        alignment_period     = "900s"
+        per_series_aligner   = "ALIGN_FRACTION_TRUE"
+        cross_series_reducer = "REDUCE_MEAN"
+        group_by_fields      = ["resource.label.host"]
       }
     }
   }
@@ -96,14 +132,16 @@ resource "google_monitoring_alert_policy" "import_stale" {
   notification_channels = [google_monitoring_notification_channel.email.id]
 
   documentation {
-    content = join("\n", [
-      "No FlockWatch scheduled job has completed in nine days.",
-      "",
-      "This is the silent-failure case: the scheduler stopped triggering, so",
-      "no job is failing — none are running. Camera data is going stale.",
-      "",
-      "Check: https://console.cloud.google.com/cloudscheduler?project=${var.project_id}",
-    ])
+    content   = <<-EOT
+      The newest OpenStreetMap import is more than nine days old.
+
+      The site is up and serving, but the camera data has stopped being
+      refreshed — most likely the weekly Cloud Scheduler trigger or the
+      Cloud Run Job has stopped running.
+
+      Check: https://console.cloud.google.com/cloudscheduler
+      The import is idempotent, so re-running it by hand is always safe.
+    EOT
     mime_type = "text/markdown"
   }
 
