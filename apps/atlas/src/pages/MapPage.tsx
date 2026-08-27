@@ -107,6 +107,12 @@ export default function MapPage() {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const clusterLayer = useRef<L.MarkerClusterGroup | null>(null);
+  // Server-computed bubbles live on their own plain layer, deliberately not
+  // inside the markercluster group. Putting them in it made markercluster
+  // cluster the bubbles themselves and label each group with the number of
+  // bubbles it had swallowed — so a national view of 136,008 cameras showed
+  // "4", "3", "5". The counts are already final; they must not be re-grouped.
+  const aggregateLayer = useRef<L.LayerGroup | null>(null);
   const refetchTimer = useRef<number | undefined>(undefined);
   // Guards against out-of-order responses; see loadCameras.
   const loadToken = useRef(0);
@@ -164,6 +170,12 @@ export default function MapPage() {
     clusterLayer.current = cluster;
     m.addLayer(cluster);
 
+    // Plain group: these bubbles already carry final counts and must not be
+    // clustered again. See the aggregateLayer declaration above.
+    const aggregates = L.layerGroup();
+    aggregateLayer.current = aggregates;
+    m.addLayer(aggregates);
+
     // Leaflet measures its container on init; this page is lazy-loaded, so
     // it can mount before layout settles. Observing the container covers
     // that plus later changes (rotation, mobile toolbars collapsing).
@@ -186,6 +198,7 @@ export default function MapPage() {
       m.remove();
       map.current = null;
       clusterLayer.current = null;
+      aggregateLayer.current = null;
     };
   }, []);
 
@@ -258,6 +271,10 @@ export default function MapPage() {
       if (!cluster) return;
 
       cluster.clearLayers();
+      // Drop any bubbles from the previous, more zoomed-out draw; otherwise
+      // a bubble counting these cameras sits on top of the cameras
+      // themselves.
+      aggregateLayer.current?.clearLayers();
       const stroke = themeColor("--bg", "#ffffff");
       const fill = themeColor("--status-confirmed", "#1b6b4a");
       const markers = cameras.map((c) => {
@@ -299,9 +316,13 @@ export default function MapPage() {
   // Two visually different kinds of cluster bubble on one map would imply a
   // distinction that doesn't exist — both mean "this many cameras here".
   function drawClusterBubbles(summary: CameraClusters) {
-    const cluster = clusterLayer.current;
-    if (!cluster) return;
-    cluster.clearLayers();
+    const aggregates = aggregateLayer.current;
+    if (!aggregates) return;
+    // Both layers are cleared on every draw. Leaving the other populated
+    // would show the same cameras twice — once as points, once inside a
+    // bubble counting them.
+    clusterLayer.current?.clearLayers();
+    aggregates.clearLayers();
 
     const markers = summary.clusters.map((c) => {
       // Matches markercluster's own size bands so a bubble doesn't change
@@ -332,7 +353,7 @@ export default function MapPage() {
       });
     });
 
-    cluster.addLayers(markers);
+    markers.forEach((mk) => aggregates.addLayer(mk));
   }
 
   function goToPlace(place: Place) {
