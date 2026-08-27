@@ -57,6 +57,15 @@ var privateBrands = []string{
 	"ups", "fedex", "amazon", "kaiser permanente", "tanger",
 }
 
+// Markers that identify a private operator wherever they appear in the
+// name, not only as a suffix — "Balcones Trails Apartment Complex" carries
+// the signal in the middle and was falling through to "unknown".
+var privateSubstrings = []string{
+	"apartment", "condominium", "condo ", "homeowners", " hoa",
+	"shopping center", "shopping centre", "retail", "dealership",
+	"country club", "golf club", "storage",
+}
+
 // Suffixes that mark a company rather than a public body.
 var privateMarkers = []string{
 	"inc.", "inc", "llc", "l.l.c.", "corp", "corporation", "company",
@@ -78,11 +87,27 @@ func ClassifyOperator(operator string) OperatorType {
 		return OperatorUnknown
 	}
 
+	// "Cottleville PD", "Maricopa PD" — the abbreviation is common in the
+	// tags and was falling through to "unknown". Matched as a whole word so
+	// it can't fire on a substring of something unrelated.
+	for _, field := range strings.Fields(name) {
+		clean := strings.Trim(field, ".,()")
+		if clean == "pd" || clean == "police" || clean == "so" || clean == "sd" {
+			return OperatorLawEnforcement
+		}
+	}
+
 	for _, p := range operatorPatterns {
 		for _, kw := range p.keywords {
 			if strings.Contains(name, kw) {
 				return p.kind
 			}
+		}
+	}
+
+	for _, sub := range privateSubstrings {
+		if strings.Contains(name, sub) {
+			return OperatorPrivate
 		}
 	}
 

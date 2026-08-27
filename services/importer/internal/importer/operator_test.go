@@ -74,3 +74,22 @@ func TestClassifyOperator_KnownBrands(t *testing.T) {
 		t.Errorf("expected unknown for an unlisted name, got %q", got)
 	}
 }
+
+// Gaps found by reading the real derived queue rather than by reasoning
+// about the code: both of these were sitting as "unclassified".
+func TestClassifyOperator_QueueGaps(t *testing.T) {
+	for _, in := range []string{"Cottleville PD", "Maricopa PD", "York Police"} {
+		if got := ClassifyOperator(in); got != OperatorLawEnforcement {
+			t.Errorf("ClassifyOperator(%q) = %q, want law_enforcement", in, got)
+		}
+	}
+	for _, in := range []string{"Balcones Trails Apartment Complex", "Sunrise Storage"} {
+		if got := ClassifyOperator(in); got != OperatorPrivate {
+			t.Errorf("ClassifyOperator(%q) = %q, want private", in, got)
+		}
+	}
+	// Whole-word matching: "pd" inside another word must not trigger.
+	if got := ClassifyOperator("Updike Township"); got == OperatorLawEnforcement {
+		t.Errorf(`"Updike Township" matched law enforcement on a substring`)
+	}
+}
