@@ -218,6 +218,44 @@ export function listCameras(
   return request<CameraSighting[]>(`/cameras${qs ? `?${qs}` : ""}`);
 }
 
+export interface CameraCluster {
+  lat: number;
+  lng: number;
+  count: number;
+}
+
+export interface CameraClusters {
+  /**
+   * Every camera matching the filters in this viewport — a true count, not
+   * a capped one. /cameras caps its response, so at low zoom its length
+   * says nothing about how many cameras are actually there.
+   */
+  total: number;
+  cell_size_deg: number;
+  clusters: CameraCluster[];
+}
+
+/**
+ * Server-side aggregation for zoomed-out views, where returning individual
+ * points would mean either an unusable payload or a misleading sample.
+ *
+ * zoom controls the grid cell size only, so bubbles stay a constant size on
+ * screen instead of fragmenting as you zoom.
+ */
+export function listCameraClusters(
+  bbox: [number, number, number, number],
+  zoom: number,
+  filters: CameraFilters = {},
+) {
+  const params = new URLSearchParams();
+  params.set("bbox", bbox.join(","));
+  params.set("zoom", String(Math.round(zoom)));
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) params.set(key, value);
+  }
+  return request<CameraClusters>(`/cameras/clusters?${params.toString()}`);
+}
+
 export interface Place {
   label: string;
   lat: number;

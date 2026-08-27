@@ -12,40 +12,12 @@ import (
 // bounding box via ?bbox=west,south,east,north. This is the opt-in precise
 // pin layer and is not shown by default in the web UI.
 func (s *Server) handleListCameras(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-
-	var west, south, east, north float64
-	hasBBox := false
-	if b := q.Get("bbox"); b != "" {
-		var err error
-		west, south, east, north, err = parseBBox(b)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid bbox, expected west,south,east,north")
-			return
-		}
-		hasBBox = true
-	}
-
-	// Optional filters. Empty string means "no filter" for each, so a plain
-	// /cameras call still returns everything.
-	source := q.Get("source")
-	if source != "" && source != "osm_import" && source != "user_submission" {
-		writeError(w, http.StatusBadRequest, "invalid source, must be osm_import or user_submission")
+	// Shared with /cameras/clusters so the two cannot drift: a bubble's
+	// count has to match what zooming into it reveals.
+	f, err := parseCameraFilters(r.URL.Query())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
-	}
-
-	status := q.Get("status")
-	if status != "" && status != "confirmed" && status != "under_review" && status != "removed" {
-		writeError(w, http.StatusBadRequest, "invalid status, must be confirmed, under_review, or removed")
-		return
-	}
-
-	// manufacturer=unknown selects rows where OSM didn't record one, which
-	// can't be expressed as a plain equality match.
-	manufacturer := q.Get("manufacturer")
-	manufacturerUnknown := manufacturer == "unknown"
-	if manufacturerUnknown {
-		manufacturer = ""
 	}
 
 	// The bbox comparison runs in geometry space (location::geometry),
@@ -68,10 +40,10 @@ func (s *Server) handleListCameras(w http.ResponseWriter, r *http.Request) {
 		  AND ($8 = '' OR manufacturer = $8)
 		  AND (NOT $9 OR manufacturer IS NULL)
 		ORDER BY created_at DESC
-		LIMIT 1000
+		LIMIT 5000
 	`
-	rows, err := s.db.Query(r.Context(), sql, hasBBox, west, south, east, north,
-		source, status, manufacturer, manufacturerUnknown)
+	rows, err := s.db.Query(r.Context(), sql, f.hasBBox, f.west, f.south, f.east, f.north,
+		f.source, f.status, f.manufacturer, f.manufacturerUnknown)
 	if err != nil {
 		serverError(w, r, http.StatusInternalServerError, "could not load cameras", err)
 		return

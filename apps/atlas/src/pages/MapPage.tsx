@@ -6,8 +6,10 @@ import PlaceSearch from "../components/PlaceSearch";
 import { useTheme } from "../lib/theme";
 
 import {
+  listCameraClusters,
   listCameras,
   listManufacturers,
+  type CameraClusters,
   type CameraFilters,
   type CameraSighting,
   type ManufacturerCount,
@@ -20,7 +22,30 @@ const TILE_BASE = import.meta.env.VITE_TILE_BASE ?? "/tiles";
 
 // Mirrors the server-side LIMIT in services/api's handleListCameras. A
 // response that hits exactly this was almost certainly truncated.
-const API_LIMIT = 1000;
+const API_LIMIT = 5000;
+
+// Esri's Canvas basemaps hold real tiles only to zoom 16. Above that the
+// service still answers HTTP 200 — with a grey placeholder reading "Map data
+// not yet available", which is what turned the map into a blank watermarked
+// sheet when you zoomed in one step too far.
+//
+// maxNativeZoom stops Leaflet requesting those levels at all and upscales
+// the z16 tiles instead. Slightly soft, but continuous, and the camera
+// markers stay crisp because they're vectors. maxZoom is kept higher than
+// the tile ceiling deliberately: at street level the useful thing on screen
+// is the dots and their spacing, not basemap detail.
+const MAX_TILE_ZOOM = 16;
+const MAX_ZOOM = 19;
+
+// Above this many cameras in view, the map draws server-computed cluster
+// bubbles instead of individual points. Below it, every camera in view is
+// drawn individually.
+//
+// It's a density rule rather than a zoom rule on purpose: zoom alone is a
+// poor proxy. Downtown Atlanta at zoom 10 holds ~1,100 cameras while most of
+// Wyoming at the same zoom holds none, and any fixed zoom threshold is
+// therefore wrong for one of them.
+const RAW_POINT_THRESHOLD = 2000;
 
 /**
  * Leaflet, not MapLibre GL.
@@ -83,12 +108,18 @@ export default function MapPage() {
   const map = useRef<L.Map | null>(null);
   const clusterLayer = useRef<L.MarkerClusterGroup | null>(null);
   const refetchTimer = useRef<number | undefined>(undefined);
+  // Guards against out-of-order responses; see loadCameras.
+  const loadToken = useRef(0);
   const baseLayer = useRef<L.TileLayer | null>(null);
   const labelLayer = useRef<L.TileLayer | null>(null);
   const { active: theme } = useTheme();
 
   const [count, setCount] = useState<number | null>(null);
   const [truncated, setTruncated] = useState(false);
+  // Whether the map is currently showing aggregated bubbles rather than one
+  // marker per camera. The legend has to say which, or a bubble reading
+  // "14k" looks like fourteen thousand individual dots failed to render.
+  const [aggregated, setAggregated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<CameraFilters>({});
   const [manufacturers, setManufacturers] = useState<ManufacturerCount[]>([]);
@@ -113,8 +144,16 @@ export default function MapPage() {
     map.current = m;
 
     const tiles = tileSet(theme === "dark" ? "Dark" : "Light");
-    baseLayer.current = L.tileLayer(tiles.base, { attribution: ATTRIBUTION, maxZoom: 18 }).addTo(m);
-    labelLayer.current = L.tileLayer(tiles.labels, { maxZoom: 18, pane: "shadowPane" }).addTo(m);
+    baseLayer.current = L.tileLayer(tiles.base, {
+      attribution: ATTRIBUTION,
+      maxZoom: MAX_ZOOM,
+      maxNativeZoom: MAX_TILE_ZOOM,
+    }).addTo(m);
+    labelLayer.current = L.tileLayer(tiles.labels, {
+      maxZoom: MAX_ZOOM,
+      maxNativeZoom: MAX_TILE_ZOOM,
+      pane: "shadowPane",
+    }).addTo(m);
 
     // Clustering isn't cosmetic: a full US import is 100k+ points, and
     // drawing individual markers at low zoom would stall the browser.
@@ -192,8 +231,29 @@ export default function MapPage() {
       Math.min(90, b.getNorth()),
     ];
 
+    // Each load is tagged so a slow response from an earlier viewport can't
+    // overwrite a newer one. Panning fires these faster than they return,
+    // and an out-of-order result paints markers for somewhere you've left.
+    const token = ++loadToken.current;
+
     try {
+      // Always ask for the aggregate first: it is cheap, and its total is
+      // the only trustworthy answer to "how many cameras are in view" —
+      // /cameras caps its response, so counting what it returns understates
+      // reality by whatever the cap truncated.
+      const summary = await listCameraClusters(bbox, m.getZoom(), filtersRef.current);
+      if (token !== loadToken.current) return;
+
+      if (summary.total > RAW_POINT_THRESHOLD) {
+        drawClusterBubbles(summary);
+        setCount(summary.total);
+        setAggregated(true);
+        setError(null);
+        return;
+      }
+
       const cameras: CameraSighting[] = await listCameras(bbox, filtersRef.current);
+      if (token !== loadToken.current) return;
       const cluster = clusterLayer.current;
       if (!cluster) return;
 
@@ -225,10 +285,54 @@ export default function MapPage() {
 
       setCount(cameras.length);
       setTruncated(cameras.length >= API_LIMIT);
+      setAggregated(false);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load camera locations");
     }
+  }
+
+  // Draws one bubble per server-computed cell.
+  //
+  // These deliberately reuse markercluster's own class names so they inherit
+  // the same brand styling as the client-side clusters shown when zoomed in.
+  // Two visually different kinds of cluster bubble on one map would imply a
+  // distinction that doesn't exist — both mean "this many cameras here".
+  function drawClusterBubbles(summary: CameraClusters) {
+    const cluster = clusterLayer.current;
+    if (!cluster) return;
+    cluster.clearLayers();
+
+    const markers = summary.clusters.map((c) => {
+      // Matches markercluster's own size bands so a bubble doesn't change
+      // size purely because the map crossed the aggregation threshold.
+      const size = c.count < 100 ? "small" : c.count < 1000 ? "medium" : "large";
+      const label =
+        c.count >= 10000
+          ? `${Math.round(c.count / 1000)}k`
+          : c.count >= 1000
+            ? `${(c.count / 1000).toFixed(1)}k`
+            : String(c.count);
+
+      return L.marker([c.lat, c.lng], {
+        icon: L.divIcon({
+          html: `<div><span>${label}</span></div>`,
+          className: `marker-cluster marker-cluster-${size}`,
+          iconSize: L.point(40, 40),
+        }),
+        // Announced to screen readers, which otherwise get an unlabelled
+        // marker; the visible text is abbreviated ("14k") and the exact
+        // figure is worth keeping available.
+        title: `${c.count.toLocaleString()} cameras`,
+      }).on("click", () => {
+        // Zoom toward the cluster rather than opening a popup: at this
+        // density the useful action is "show me what's inside".
+        const m = map.current;
+        if (m) m.setView([c.lat, c.lng], Math.min(m.getZoom() + 3, MAX_ZOOM));
+      });
+    });
+
+    cluster.addLayers(markers);
   }
 
   function goToPlace(place: Place) {
@@ -316,9 +420,15 @@ export default function MapPage() {
             ? error
             : count === null
               ? "Loading…"
-              : truncated
-                ? `Showing the first ${count.toLocaleString()} cameras in view — there are more here. Zoom in to see them all.`
-                : `${count.toLocaleString()} camera${count === 1 ? "" : "s"} in view.`}
+              : aggregated
+                ? // A real total now, not a capped one. The previous wording
+                  // ("showing the first 1,000") described a limitation of the
+                  // request rather than the data, and made a nationwide view
+                  // of 136,000 cameras look like a sparse scattering.
+                  `${count.toLocaleString()} cameras in view, grouped by area. Zoom in to see individual locations.`
+                : truncated
+                  ? `Showing ${count.toLocaleString()} cameras in view — there are more here. Zoom in to see them all.`
+                  : `${count.toLocaleString()} camera${count === 1 ? "" : "s"} in view.`}
         </p>
       </div>
     </div>

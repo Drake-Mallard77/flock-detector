@@ -71,6 +71,10 @@ func (s *Server) Router() http.Handler {
 		r.Get("/", s.handleListCameras)
 		r.With(s.submissionLimiter.middleware).Post("/", s.handleCreateCamera)
 		r.Get("/manufacturers", s.handleListManufacturers)
+		// Aggregated counts for zoomed-out views. /cameras returns individual
+		// points capped at a fixed limit, which at national zoom showed an
+		// arbitrary 0.7% of the data as if it were the whole picture.
+		r.Get("/clusters", s.handleCameraClusters)
 	})
 
 	r.Route("/auth", func(r chi.Router) {
