@@ -125,7 +125,10 @@ func UpsertNodes(ctx context.Context, pool *pgxpool.Pool, state string, nodes []
 				camera_type  = EXCLUDED.camera_type,
 				manufacturer = EXCLUDED.manufacturer,
 				operator     = EXCLUDED.operator,
-				state        = EXCLUDED.state
+				state        = EXCLUDED.state,
+				-- Moves on every refresh, which is what /health/data reads to
+				-- tell "refreshing fine" from "stopped running".
+				updated_at   = now()
 			RETURNING (xmax = 0) AS inserted
 		`, n.Lon, n.Lat, direction, cameraType, manufacturer, operator, externalID, state)
 
