@@ -126,6 +126,9 @@ export default function MapPage() {
   // marker per camera. The legend has to say which, or a bubble reading
   // "14k" looks like fourteen thousand individual dots failed to render.
   const [aggregated, setAggregated] = useState(false);
+  // Phones only — CSS keeps the controls open and the toggle hidden on
+  // wider screens, so this state is inert there.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<CameraFilters>({});
   const [manufacturers, setManufacturers] = useState<ManufacturerCount[]>([]);
@@ -134,6 +137,11 @@ export default function MapPage() {
   // inside them would capture the initial value. A ref keeps them current.
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
+
+  // Shown on the collapsed toggle. Without it, a filter set on a phone and
+  // then hidden behind the collapsed panel silently changes what the map
+  // shows, with nothing on screen saying so.
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
   useEffect(() => {
     if (!container.current || map.current) return;
@@ -386,8 +394,25 @@ export default function MapPage() {
     <div className="map-wrap">
       <div className="map-root" ref={container} />
 
-      <div className="map-filters">
-        <PlaceSearch onSelect={goToPlace} />
+      <div className={`map-filters${filtersOpen ? " is-open" : ""}`}>
+        {/* Collapsed by default on phones, where the filter panel covered
+            roughly a third of the map and the map is the entire point of
+            the page. Hidden entirely above the breakpoint by CSS, so on a
+            laptop the controls are simply always visible — no extra click
+            introduced for the case that was already fine. */}
+        <button
+          type="button"
+          className="map-filters-toggle"
+          aria-expanded={filtersOpen}
+          aria-controls="map-filter-controls"
+          onClick={() => setFiltersOpen((open) => !open)}
+        >
+          {filtersOpen ? "Hide filters" : "Search and filter"}
+          {activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+        </button>
+
+        <div className="map-filters-body" id="map-filter-controls">
+          <PlaceSearch onSelect={goToPlace} />
 
         <label>
           <span>Source</span>
@@ -428,6 +453,7 @@ export default function MapPage() {
             <option value="unknown">Not recorded</option>
           </select>
         </label>
+        </div>
       </div>
 
       <div className="map-legend">

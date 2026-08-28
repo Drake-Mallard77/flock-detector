@@ -982,3 +982,198 @@ button.primary:hover:not(:disabled) {
 .review-bulk {
   border-left: 3px solid var(--brand);
 }
+
+/* ---------------------------------------------------------------------
+   Responsive layout.
+
+   Until now the only media query in this file was the dark-mode one, so
+   the layout was effectively desktop-only. Two things were actually
+   broken rather than merely cramped, and they're fixed above the
+   breakpoint because they were never phone-specific:
+
+   1. Every page inside <main> could be forced wider than the viewport by
+      its widest child. <main> is a column flex container, and a flex item
+      defaults to min-width:auto — it refuses to shrink below its
+      min-content width. The deployments table (nowrap headers, six
+      columns) has a min-content width of ~776px, so the *whole page*
+      became 776px wide and scrolled sideways: heading, prose and all, not
+      just the table. This is the horizontal twin of the min-height:0 note
+      on `main` above.
+
+   2. With that fixed, .table-scroll finally does its job and the table
+      scrolls within the page instead of dragging the page with it.
+   --------------------------------------------------------------------- */
+
+.page,
+.map-wrap {
+  min-width: 0;
+}
+
+/* The scroll container needs the same treatment for the same reason. */
+.table-scroll {
+  min-width: 0;
+  /* Momentum scrolling on iOS, and a hint that there's more to the right. */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* The filter toggle is a phone affordance; on anything wider the controls
+   are always visible and the button would just be noise. */
+.map-filters-toggle {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  /* --- Header -------------------------------------------------------
+     Was ~160px tall on a 390px-wide phone: brand, nav, CTA and theme
+     toggle each wrapping onto their own line, eating a fifth of the
+     screen before any content. Tightened rather than restructured — the
+     markup order still reads correctly to a screen reader. */
+  .site-header {
+    padding: 0.6rem 0.9rem;
+    gap: 0.5rem 1rem;
+    align-items: center;
+  }
+
+  .brand {
+    font-size: 0.95rem;
+  }
+
+  .site-nav {
+    /* Full width so the links and the toggle share one row rather than
+       stacking under a half-empty brand line. */
+    width: 100%;
+    margin-left: 0;
+    gap: 0.15rem;
+    justify-content: space-between;
+  }
+
+  /* 44px minimum touch targets. The nav links were 20-24px tall, which is
+     roughly half the size a fingertip can reliably hit. Padding rather
+     than a height, so the text stays vertically centred. */
+  .site-nav a {
+    padding: 0.7rem 0.4rem;
+    font-size: 0.88rem;
+  }
+
+  .site-nav .cta {
+    padding: 0.55rem 0.7rem;
+    font-size: 0.85rem;
+  }
+
+  /* --- Map ----------------------------------------------------------
+     The filter panel covered roughly a third of the map, and the legend
+     another chunk of what was left. Both collapse. */
+  .map-filters {
+    top: 0.5rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    padding: 0;
+    /* Sized by content when collapsed, so the map shows through beside
+       the button instead of behind an invisible full-width panel. */
+    width: auto;
+  }
+
+  .map-filters-toggle {
+    display: block;
+    width: 100%;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 550;
+    text-align: left;
+    padding: 0.7rem 0.85rem;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--brand);
+    cursor: pointer;
+  }
+
+  .map-filters-body {
+    display: none;
+    padding: 0 0.85rem 0.85rem;
+  }
+
+  .map-filters.is-open .map-filters-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  /* Full-width controls when open: two half-width selects side by side on
+     a 390px screen leaves each too narrow to read an agency name in. */
+  .map-filters-body label,
+  .map-filters-body .place-search {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .map-filters-body select,
+  .map-filters-body input {
+    width: 100%;
+    /* 16px. Anything smaller and iOS Safari zooms the whole page on
+       focus, which leaves the map panned somewhere the user didn't ask
+       for and no obvious way back. */
+    font-size: 16px;
+    padding: 0.5rem;
+  }
+
+  .place-results {
+    min-width: 0;
+  }
+
+  /* The legend keeps the count — which is the honest headline of this
+     page — and drops to a single compact line. */
+  .map-legend {
+    bottom: 0.5rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.72rem;
+    line-height: 1.4;
+  }
+
+  .map-legend h2 {
+    font-size: 0.62rem;
+    margin-bottom: 0.2rem;
+  }
+
+  /* --- Text pages ---------------------------------------------------- */
+  .page {
+    padding: 1.25rem 0.9rem 2.5rem;
+  }
+
+  .page h1 {
+    font-size: 1.25rem;
+  }
+
+  /* Filter pills wrap instead of running off the edge, and each is tall
+     enough to tap. */
+  .filters {
+    gap: 0.35rem;
+  }
+
+  .filters button {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .filters input,
+  .filters select {
+    font-size: 16px;
+    padding: 0.5rem;
+    width: 100%;
+  }
+
+  /* Tighter cells so more of the table is readable before scrolling. */
+  .records th,
+  .records td {
+    padding: 0.5rem 0.45rem;
+  }
+}
+
+/* Phones in landscape, and short windows generally: the map overlays
+   would otherwise meet in the middle and leave no map between them. */
+@media (max-height: 500px) {
+  .map-legend {
+    display: none;
+  }
+}
