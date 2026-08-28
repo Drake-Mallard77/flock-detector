@@ -185,6 +185,36 @@ resource "google_monitoring_dashboard" "service_health" {
         {
           xPos = 0, yPos = 12, width = 12, height = 4
           widget = {
+            # The panel that closes the loop on the 5xx alert. That alert
+            # knows only HTTP status; this says which endpoint and what
+            # kind of failure, straight from the structured logs, so acting
+            # on it doesn't start with a search in Logs Explorer.
+            title = "Application errors, by route and message"
+            xyChart = {
+              dataSets = [{
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "resource.type=\"cloud_run_revision\" metric.type=\"logging.googleapis.com/user/${google_logging_metric.api_errors.name}\""
+                    aggregation = {
+                      alignmentPeriod    = "300s"
+                      perSeriesAligner   = "ALIGN_SUM"
+                      crossSeriesReducer = "REDUCE_SUM"
+                      groupByFields = [
+                        "metric.label.\"route\"",
+                        "metric.label.\"message\"",
+                      ]
+                    }
+                  }
+                }
+                plotType = "STACKED_BAR"
+              }]
+              yAxis = { label = "errors", scale = "LINEAR" }
+            }
+          }
+        },
+        {
+          xPos = 0, yPos = 16, width = 12, height = 4
+          widget = {
             # Grouped by checker location because a single failing region is
             # a network problem and every region failing is an outage. The
             # alert can't tell you which; this can.
