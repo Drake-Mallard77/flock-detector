@@ -1214,3 +1214,44 @@ button.primary:hover:not(:disabled) {
     display: none;
   }
 }
+
+/* A standalone navigation control, not a link inside a sentence, so the
+   inline-link exception to the target-size rule doesn't cover it. */
+.back-link {
+  margin: 0 0 1rem;
+}
+
+.back-link a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  text-decoration: none;
+}
+
+/* Touch targets, keyed on the input device rather than the viewport.
+   
+   The width breakpoint above misses the case it most needs to catch: a
+   phone in landscape is 844px wide, so it took the desktop styling and
+   went back to 20-24px nav targets — the same finger, a worse target,
+   purely because the device was rotated. `pointer: coarse` asks the
+   question that actually matters, and covers tablets and touchscreen
+   laptops that no width rule would have caught either.
+
+   Inline links inside prose are deliberately left alone: the target-size
+   rule exempts links whose size is constrained by the line-height of the
+   text around them, and padding them out would wreck the paragraphs. */
+@media (pointer: coarse) {
+  .site-nav a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .theme-toggle button {
+    min-height: 44px;
+  }
+
+  .filters button {
+    min-height: 44px;
+  }
+}

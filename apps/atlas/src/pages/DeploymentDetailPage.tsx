@@ -47,7 +47,9 @@ export default function DeploymentDetailPage() {
     return (
       <div className="page">
         <div className="notice error">{error}</div>
-        <Link to="/deployments">← All deployments</Link>
+        <p className="back-link">
+          <Link to="/deployments">← All deployments</Link>
+        </p>
       </div>
     );
   }
@@ -62,7 +64,7 @@ export default function DeploymentDetailPage() {
 
   return (
     <div className="page">
-      <p style={{ margin: "0 0 1rem" }}>
+      <p className="back-link">
         <Link to="/deployments">← All deployments</Link>
       </p>
 
