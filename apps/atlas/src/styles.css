@@ -987,24 +987,39 @@ button.primary:hover:not(:disabled) {
    Responsive layout.
 
    Until now the only media query in this file was the dark-mode one, so
-   the layout was effectively desktop-only. Two things were actually
-   broken rather than merely cramped, and they're fixed above the
-   breakpoint because they were never phone-specific:
+   the layout was effectively desktop-only. One thing was a genuine bug
+   rather than cramped styling, and it's fixed at every width because it
+   was never phone-specific.
 
-   1. Every page inside <main> could be forced wider than the viewport by
-      its widest child. <main> is a column flex container, and a flex item
-      defaults to min-width:auto — it refuses to shrink below its
-      min-content width. The deployments table (nowrap headers, six
-      columns) has a min-content width of ~776px, so the *whole page*
-      became 776px wide and scrolled sideways: heading, prose and all, not
-      just the table. This is the horizontal twin of the min-height:0 note
-      on `main` above.
+   Every page inside <main> was forced wider than the viewport by its
+   widest child: the deployments table (six columns, nowrap headers) has a
+   min-content width of ~740px, and the *whole page* took that width and
+   scrolled sideways — heading, prose and all, not just the table.
 
-   2. With that fixed, .table-scroll finally does its job and the table
-      scrolls within the page instead of dragging the page with it.
+   Two separate things caused it, and fixing only the first is why this
+   took two attempts:
+
+   1. `.page` is a flex item of <main>, and flex items default to
+      min-width:auto — they refuse to shrink below min-content. That's the
+      horizontal twin of the min-height:0 note on `main` above.
+
+   2. Less obvious, and the actual blocker: `.page` sets `margin: 0 auto`
+      to centre itself. An auto margin on the cross axis of a flex
+      container overrides `align-items: stretch`, so the item stops
+      filling its parent and is sized to fit its content instead. It was
+      736px wide inside a 390px parent. `width: 100%` restores the
+      stretch while keeping max-width + auto margins doing the centring
+      on wide screens.
+
+   With both fixed, .table-scroll finally does the job it was already
+   written to do, and the table scrolls within the page.
    --------------------------------------------------------------------- */
 
-.page,
+.page {
+  width: 100%;
+  min-width: 0;
+}
+
 .map-wrap {
   min-width: 0;
 }
@@ -1012,8 +1027,6 @@ button.primary:hover:not(:disabled) {
 /* The scroll container needs the same treatment for the same reason. */
 .table-scroll {
   min-width: 0;
-  /* Momentum scrolling on iOS, and a hint that there's more to the right. */
-  -webkit-overflow-scrolling: touch;
 }
 
 /* The filter toggle is a phone affordance; on anything wider the controls
@@ -1047,17 +1060,38 @@ button.primary:hover:not(:disabled) {
     justify-content: space-between;
   }
 
-  /* 44px minimum touch targets. The nav links were 20-24px tall, which is
-     roughly half the size a fingertip can reliably hit. Padding rather
-     than a height, so the text stays vertically centred. */
+  /* 44px minimum touch targets. The nav links were 20-24px tall, roughly
+     half what a fingertip reliably hits.
+     min-height + centring rather than padding: padding has to be derived
+     from the font size and line-height to reach a target height, and the
+     first attempt at this landed between 34px and 41px because that
+     arithmetic was wrong. Stating the height directly can't drift. */
   .site-nav a {
-    padding: 0.7rem 0.4rem;
-    font-size: 0.88rem;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 0.35rem;
+    font-size: 0.85rem;
   }
 
   .site-nav .cta {
-    padding: 0.55rem 0.7rem;
-    font-size: 0.85rem;
+    padding: 0 0.6rem;
+    font-size: 0.82rem;
+  }
+
+  /* Same treatment for the theme toggle, which was 23px tall. Sized down
+     in text so the whole nav — links, CTA and toggle — has a chance of
+     fitting without wrapping to a third row. */
+  .theme-toggle button {
+    min-height: 44px;
+    padding: 0 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  /* The brand is the least useful thing on a phone once you're in the app
+     — the subtitle especially. Dropping it reclaims a line. */
+  .brand small {
+    display: none;
   }
 
   /* --- Map ----------------------------------------------------------
@@ -1066,10 +1100,13 @@ button.primary:hover:not(:disabled) {
   .map-filters {
     top: 0.5rem;
     left: 0.5rem;
-    right: 0.5rem;
+    /* Stops short of the right edge to clear Leaflet's zoom control, which
+       is pinned top-right and was drawing on top of the panel. Leaving the
+       control where it is beats relocating it: bottom-right would collide
+       with the legend, and moving both to solve one overlap is how you end
+       up with three. */
+    right: 3.5rem;
     padding: 0;
-    /* Sized by content when collapsed, so the map shows through beside
-       the button instead of behind an invisible full-width panel. */
     width: auto;
   }
 
