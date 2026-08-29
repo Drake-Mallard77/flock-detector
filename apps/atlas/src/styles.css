@@ -1685,3 +1685,117 @@ button.primary:hover:not(:disabled) {
   line-height: 1.45;
   color: var(--text-muted);
 }
+
+/* Sortable column headers. A button rather than a click handler on the th,
+   so the control is reachable by keyboard and announced as actionable. */
+.th-sort {
+  font: inherit;
+  font-size: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.th-sort:hover {
+  color: var(--brand);
+}
+
+/* Retry beside an error, so a transient failure isn't a dead end. */
+.retry {
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-left: 0.4rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* Share the current map view. */
+.legend-share {
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-top: 0.5rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--brand);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--brand);
+  cursor: pointer;
+  width: 100%;
+}
+
+/* --- What's changed --------------------------------------------------- */
+.change-list {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0.4rem;
+}
+
+.change-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.change-list a {
+  text-decoration: none;
+  font-weight: 550;
+}
+
+.change-list span {
+  color: var(--status-confirmed);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.change-events {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.change-events li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--status-confirmed);
+  border-radius: 6px;
+}
+
+.change-meta {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.change-note {
+  max-width: 42rem;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}

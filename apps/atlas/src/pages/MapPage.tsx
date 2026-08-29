@@ -244,6 +244,10 @@ export default function MapPage() {
   // Whether direction wedges are on screen right now, so the legend
   // describes what is actually drawn rather than what might be.
   const [showingWedges, setShowingWedges] = useState(false);
+  // Confirmation for the share button. The URL has encoded the map view
+  // for a while, but nothing on screen said so, so a map built to be
+  // citable was in practice never cited.
+  const [copied, setCopied] = useState(false);
   // Phones only — CSS keeps the controls open and the toggle hidden on
   // wider screens, so this state is inert there.
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -551,6 +555,19 @@ export default function MapPage() {
 
   // Resets every filter at once, and strips them from the URL so a shared
   // or bookmarked link stops carrying them too.
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard access is refused in some browsers and over plain HTTP.
+      // Selecting the address bar is the honest fallback; silently doing
+      // nothing would look like the button is broken.
+      window.prompt("Copy this link:", window.location.href);
+    }
+  }
+
   function clearFilters() {
     setFilters({});
     setSearchParams(
@@ -685,6 +702,10 @@ export default function MapPage() {
             <span>Direction it faces, where recorded</span>
           </div>
         )}
+        <button type="button" className="legend-share" onClick={copyLink}>
+          {copied ? "Link copied" : "Copy link to this view"}
+        </button>
+
         {/* Says so when the count is a filtered subset.
             Without this the legend reads "32 cameras in view" over an area
             holding 14,546, and the only clue is a dropdown several inches

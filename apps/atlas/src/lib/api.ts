@@ -446,3 +446,34 @@ export interface Coverage {
 export function getCoverage() {
   return request<Coverage>("/stats/coverage");
 }
+
+export interface DeploymentEvent {
+  kind: "reviewed" | "verified" | "merged";
+  from_status?: DeploymentStatus;
+  to_status: DeploymentStatus;
+  evidence_type?: EvidenceType;
+  source_links: string[];
+  note?: string;
+  created_at: string;
+  /** Present on the site-wide feed, omitted on one record's own history. */
+  agency_name?: string;
+  state?: string;
+  slug?: string;
+}
+
+export interface Changes {
+  since: string;
+  cameras_added: number;
+  by_state: Array<{ state: string; cameras: number }>;
+  decisions: DeploymentEvent[];
+}
+
+/** Cameras added and decisions taken in the last `days`. */
+export function getChanges(days = 30) {
+  return request<Changes>(`/stats/changes?days=${days}`);
+}
+
+/** One record's decision history. Public, deliberately. */
+export function listDeploymentEvents(id: string) {
+  return request<DeploymentEvent[]>(`/deployments/${encodeURIComponent(id)}/events`);
+}
