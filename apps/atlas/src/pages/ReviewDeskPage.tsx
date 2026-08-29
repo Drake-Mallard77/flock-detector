@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+
+import DuplicateResolver from "../components/DuplicateResolver";
 import { Link } from "react-router-dom";
 
 import GoogleSignIn from "../components/GoogleSignIn";
@@ -188,6 +190,10 @@ export default function ReviewDeskPage() {
           Nothing is waiting for review. <Link to="/deployments">Browse published records</Link>.
         </p>
       )}
+
+      {/* Above the review queue: a duplicate is a defect in what is already
+          published, while the queue is about what to publish next. */}
+      <DuplicateResolver />
 
       {queue && queue.length > 0 && (
         <div className="review-bulk">

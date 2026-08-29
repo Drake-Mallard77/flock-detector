@@ -1372,3 +1372,100 @@ button.primary:hover:not(:disabled) {
   opacity: 0.4;
   clip-path: polygon(50% 100%, 0 0, 100% 0);
 }
+
+/* --- Duplicate resolver (Review desk) --------------------------------- */
+.duplicates {
+  margin: 0 0 2rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--status-disputed);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+}
+
+.duplicates h2 {
+  margin: 0;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.duplicates-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--status-disputed);
+  color: var(--on-accent);
+}
+
+.duplicates-lede {
+  margin: 0.4rem 0 1rem;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 46rem;
+}
+
+.duplicate-group {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.duplicate-group h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.duplicate-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.duplicate-group li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 0.7rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.duplicate-record {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.duplicate-meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.duplicate-group button {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--brand);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--brand);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.duplicate-group button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

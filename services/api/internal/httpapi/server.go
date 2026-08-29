@@ -75,6 +75,12 @@ func (s *Server) Router() http.Handler {
 		// to hundreds of records; reviewing those one at a time isn't
 		// realistic. Same role gate as the single-record path.
 		r.With(s.requireRole("moderator", "admin")).Post("/bulk-review", s.handleBulkReviewDeployments)
+
+		// Duplicate resolution. Both moderator-gated: choosing which of two
+		// records for one agency the atlas keeps is a judgement about the
+		// public record, not a maintenance task.
+		r.With(s.requireRole("moderator", "admin")).Get("/duplicates", s.handleListDuplicates)
+		r.With(s.requireRole("moderator", "admin")).Post("/{id}/merge", s.handleMergeDeployment)
 	})
 
 	r.Route("/cameras", func(r chi.Router) {

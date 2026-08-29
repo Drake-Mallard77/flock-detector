@@ -359,3 +359,43 @@ export function getDeploymentBySlug(state: string, slug: string) {
 export function recordPath(d: Pick<Deployment, "state" | "slug">) {
   return `/state/${d.state.toLowerCase()}/${d.slug}`;
 }
+
+export interface DuplicateRecord {
+  id: string;
+  agency_name: string;
+  city: string;
+  state: string;
+  status: DeploymentStatus;
+  slug: string;
+  documented_units?: number;
+  /** Cameras currently attributed to this record. */
+  linked_cameras: number;
+  created_at: string;
+}
+
+export interface DuplicateGroup {
+  state: string;
+  records: DuplicateRecord[];
+}
+
+/**
+ * Records the atlas holds more than once for the same agency.
+ *
+ * Grouped by the same normalised name the importer now uses to decide
+ * identity, so this lists exactly what would have been treated as one
+ * record had that check always ignored punctuation.
+ */
+export function listDuplicates() {
+  return request<DuplicateGroup[]>("/deployments/duplicates");
+}
+
+/**
+ * Folds `duplicateId` into `survivorId`: moves its cameras across and
+ * retires it, pointing at where it went. Nothing is deleted.
+ */
+export function mergeDeployment(survivorId: string, duplicateId: string) {
+  return request<{ survivor_id: string; duplicate_id: string; cameras_moved: number }>(
+    `/deployments/${encodeURIComponent(survivorId)}/merge`,
+    { method: "POST", body: JSON.stringify({ duplicate_id: duplicateId }) },
+  );
+}
