@@ -1360,3 +1360,15 @@ button.primary:hover:not(:disabled) {
   line-height: 1.55;
   color: var(--text-muted);
 }
+
+/* Legend swatch for the direction wedge. A clipped triangle at the same
+   colour and opacity as the wedges on the map, so the legend shows the
+   thing itself rather than a description of it. */
+.legend-wedge {
+  width: 0.65rem;
+  height: 0.65rem;
+  flex: none;
+  background: var(--status-confirmed);
+  opacity: 0.4;
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+}

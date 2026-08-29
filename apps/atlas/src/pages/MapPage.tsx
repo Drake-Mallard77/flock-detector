@@ -4,6 +4,7 @@ import L from "leaflet";
 import "leaflet.markercluster";
 
 import PlaceSearch from "../components/PlaceSearch";
+import { directionWedge, metresPerPixel } from "../lib/geo";
 import { useTheme } from "../lib/theme";
 
 import {
@@ -368,6 +369,15 @@ export default function MapPage() {
       aggregateLayer.current?.clearLayers();
       const stroke = themeColor("--bg", "#ffffff");
       const fill = themeColor("--status-confirmed", "#1b6b4a");
+
+      // Wedges are sized in metres to land at a constant number of pixels,
+      // so they stay legible as you zoom rather than vanishing or swamping
+      // the map. Computed once per load from the viewport centre: over a
+      // single screen the latitude term barely moves, and doing it per
+      // camera would be thousands of cos() calls for a sub-pixel
+      // difference.
+      const wedgeRadiusM = metresPerPixel(m.getCenter().lat, m.getZoom()) * 22;
+
       const markers = cameras.map((c) => {
         const marker = L.circleMarker([c.lat, c.lng], {
           radius: 5,
@@ -401,6 +411,32 @@ export default function MapPage() {
         return marker;
       });
       cluster.addLayers(markers);
+
+      // Direction wedges go on the plain layer, not into the cluster group.
+      // markercluster hides a marker's geometry once it's absorbed into a
+      // bubble, so a clustered wedge would disappear while its dot stayed —
+      // and at these zooms the wedge is the informative half.
+      //
+      // Only for cameras that actually record a direction. Drawing a
+      // default heading for the other 12% would invent a fact, on a map
+      // whose whole claim is that it doesn't.
+      const wedgeLayer = aggregateLayer.current;
+      if (wedgeLayer) {
+        for (const c of cameras) {
+          if (c.direction === undefined || c.direction === null) continue;
+          L.polygon(directionWedge(c.lat, c.lng, Number(c.direction), wedgeRadiusM), {
+            color: fill,
+            weight: 0,
+            fillColor: fill,
+            // Faint: this is context around the dot, not a second dataset.
+            // At full strength a dense street reads as a solid green smear.
+            fillOpacity: 0.28,
+            // The dot underneath stays the click target; the wedge would
+            // otherwise swallow taps aimed at a camera behind it.
+            interactive: false,
+          }).addTo(wedgeLayer);
+        }
+      }
 
       setCount(cameras.length);
       setTruncated(cameras.length >= API_LIMIT);
@@ -588,6 +624,15 @@ export default function MapPage() {
           <span className="legend-dot legend-dot-camera" />
           <span>Documented ALPR camera</span>
         </div>
+        {/* Shown only when individual cameras are drawn — at aggregate zoom
+            there are no wedges to explain, and a legend describing things
+            that aren't on screen is just noise. */}
+        {!aggregated && (
+          <div className="legend-row">
+            <span className="legend-wedge" />
+            <span>Direction it faces, where recorded</span>
+          </div>
+        )}
         <p className="legend-note">
           {error
             ? error
