@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 
+import { API_BASE } from "../lib/api";
+
 export default function MethodologyPage() {
   return (
     <div className="page">
@@ -85,6 +87,51 @@ export default function MethodologyPage() {
         </p>
         <p>
           Map tiles are served by OpenStreetMap and are also © OpenStreetMap contributors.
+        </p>
+
+        {/* Placed directly under the licensing section on purpose: CSV has
+            no comment convention every parser tolerates, so the ODbL terms
+            can't travel inside the file the way they do in the GeoJSON.
+            Stating them where the download link lives is the honest
+            substitute. */}
+        <h2>Download the data</h2>
+        <p>
+          The published dataset is available as a file. Analysing it shouldn't
+          require scraping the map.
+        </p>
+        <ul className="downloads">
+          <li>
+            <a href={`${API_BASE}/export/deployments.csv`}>
+              Agency records (CSV)
+            </a>
+            <span>
+              Every published record — agency, location, documented units,
+              evidence type, and a link back to the record page. Excludes
+              candidates still under review.
+            </span>
+          </li>
+          <li>
+            <a href={`${API_BASE}/export/cameras.csv`}>Camera locations (CSV)</a>
+            <span>
+              All mapped camera locations, with direction, manufacturer and
+              operator where OpenStreetMap records them.
+            </span>
+          </li>
+          <li>
+            <a href={`${API_BASE}/export/cameras.geojson`}>
+              Camera locations (GeoJSON)
+            </a>
+            <span>
+              The same points, ready to open in QGIS or any mapping tool.
+              Carries its ODbL attribution inside the file.
+            </span>
+          </li>
+        </ul>
+        <p>
+          These files are the database, not a rendering of it, so the ODbL
+          share-alike terms above apply to anything derived from them: keep
+          the attribution, and license any redistributed database the same
+          way.
         </p>
 
         <h2>Corrections</h2>

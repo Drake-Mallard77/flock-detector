@@ -60,6 +60,14 @@ func (s *Server) Router() http.Handler {
 	// reader who has a place in mind rather than an agency name.
 	r.Get("/stats/states", s.handleStateStats)
 
+	// Bulk downloads. The data is ODbL and the point of the project is that
+	// it be usable; serving the file beats being scraped for it.
+	r.Route("/export", func(r chi.Router) {
+		r.Get("/deployments.csv", s.handleExportDeploymentsCSV)
+		r.Get("/cameras.csv", s.handleExportCamerasCSV)
+		r.Get("/cameras.geojson", s.handleExportCamerasGeoJSON)
+	})
+
 	r.Route("/deployments", func(r chi.Router) {
 		r.Get("/", s.handleListDeployments)
 		r.With(s.submissionLimiter.middleware).Post("/", s.handleCreateDeployment)
