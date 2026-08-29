@@ -546,6 +546,20 @@ export default function MapPage() {
     // The moveend handler refetches cameras for the new viewport.
   }
 
+  // Resets every filter at once, and strips them from the URL so a shared
+  // or bookmarked link stops carrying them too.
+  function clearFilters() {
+    setFilters({});
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const key of ["source", "status", "manufacturer"]) next.delete(key);
+        return next;
+      },
+      { replace: false },
+    );
+  }
+
   function setFilter(key: keyof CameraFilters, value: string) {
     setFilters((prev) => {
       const next = { ...prev };
@@ -666,6 +680,26 @@ export default function MapPage() {
           <div className="legend-row">
             <span className="legend-wedge" />
             <span>Direction it faces, where recorded</span>
+          </div>
+        )}
+        {/* Says so when the count is a filtered subset.
+            Without this the legend reads "32 cameras in view" over an area
+            holding 14,546, and the only clue is a dropdown several inches
+            away that still looks like a default. Filters also persist in
+            the URL now, so one set weeks ago silently follows you back —
+            which is exactly when an unexplained empty map reads as broken
+            data rather than an active filter. */}
+        {activeFilterCount > 0 && (
+          <div className="legend-filtered">
+            <span>
+              Filtered to{" "}
+              {[filters.manufacturer, filters.source, filters.status]
+                .filter(Boolean)
+                .join(", ")}
+            </span>
+            <button type="button" onClick={clearFilters}>
+              Clear
+            </button>
           </div>
         )}
         <p className="legend-note">

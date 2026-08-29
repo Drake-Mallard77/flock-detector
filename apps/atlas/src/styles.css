@@ -1502,3 +1502,29 @@ button.primary:hover:not(:disabled) {
   line-height: 1.5;
   color: var(--text-muted);
 }
+
+/* Says when the camera count on the map is a filtered subset. */
+.legend-filtered {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 5px;
+  background: var(--brand-soft);
+  font-size: 0.75rem;
+  color: var(--text);
+}
+
+.legend-filtered button {
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--brand);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--brand);
+  cursor: pointer;
+}
