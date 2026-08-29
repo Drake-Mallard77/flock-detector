@@ -1311,3 +1311,52 @@ button.primary:hover:not(:disabled) {
   font-weight: 550;
   color: var(--brand);
 }
+
+/* --- State index ------------------------------------------------------ */
+.state-grid {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: grid;
+  /* auto-fill with a min track: the grid reflows from four columns to one
+     without a media query, and each card stays wide enough for the longest
+     state name plus its counts. */
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.5rem;
+}
+
+.state-grid a {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  /* 44px comes free from the two lines of text plus this padding, so the
+     card is a comfortable target on touch without a separate rule. */
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brand);
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.state-grid a:hover {
+  background: var(--brand-soft);
+}
+
+.state-grid-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.state-grid-counts {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.state-grid-note {
+  max-width: 42rem;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}

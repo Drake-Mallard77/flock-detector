@@ -11,7 +11,12 @@ import (
 // ever hit, the fix is a sitemap index, not a bigger file.
 const maxSitemapURLs = 50000
 
-// sitemapStatuses are the records worth recommending to a search engine.
+// publishedStatuses are the records this project stands behind publicly.
+//
+// Used for what the sitemap recommends to search engines and for what the
+// state pages and totals count. Those are the same judgement — "would we
+// put this forward as a finding" — and keeping two lists is how they drift
+// apart and start disagreeing about the same records.
 //
 // This is narrower than what the site itself shows, and deliberately so. A
 // sitemap is a positive recommendation to index, not an access control:
@@ -29,7 +34,7 @@ const maxSitemapURLs = 50000
 // aren't promoted. Excluding them from the sitemap is the weakest signal
 // available, which is the right strength for a judgment call about
 // unverified claims.
-var sitemapStatuses = []string{"confirmed", "contract_found", "osm_documented"}
+var publishedStatuses = []string{"confirmed", "contract_found", "osm_documented"}
 
 // Static routes worth indexing. /review is omitted because it's the
 // moderator queue behind an auth gate, and /deployments/:id pages come from
@@ -41,6 +46,7 @@ var staticRoutes = []struct {
 }{
 	{"/", "daily", "1.0"},
 	{"/deployments", "daily", "0.9"},
+	{"/states", "weekly", "0.8"},
 	{"/methodology", "monthly", "0.5"},
 	{"/submit", "monthly", "0.5"},
 }
@@ -76,13 +82,25 @@ func (s *Server) handleSitemap(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// State pages, which are the ones a search engine can plausibly rank:
+	// "ALPR cameras in Tennessee" matches /state/tn, while a record page is
+	// addressed by UUID and matches nothing anyone would ever type.
+	//
+	// Only states holding a published record are listed. A state page with
+	// nothing on it is a thin result that helps no one and invites being
+	// treated as low-quality content across the rest of the site.
+	if err := s.appendStateURLs(r, &set, base); err != nil {
+		serverError(w, r, http.StatusInternalServerError, "could not build the sitemap", err)
+		return
+	}
+
 	rows, err := s.db.Query(r.Context(), `
 		SELECT id, greatest(coalesce(last_reviewed_at, updated_at), updated_at)
 		FROM deployments
 		WHERE status = ANY($1)
 		ORDER BY updated_at DESC
 		LIMIT $2
-	`, sitemapStatuses, maxSitemapURLs-len(staticRoutes))
+	`, publishedStatuses, maxSitemapURLs-len(staticRoutes))
 	if err != nil {
 		serverError(w, r, http.StatusInternalServerError, "could not build the sitemap", err)
 		return
@@ -126,4 +144,37 @@ func (s *Server) handleSitemap(w http.ResponseWriter, r *http.Request) {
 	if err := enc.Encode(set); err != nil {
 		logEncodeFailure(r, err)
 	}
+}
+
+// appendStateURLs adds one entry per state that has a published record.
+//
+// Split into its own function purely so handleSitemap stays readable: it now
+// assembles three different kinds of URL, and inlining a second full
+// query-scan-append block in the middle of it obscured the shape.
+func (s *Server) appendStateURLs(r *http.Request, set *urlSet, base string) error {
+	rows, err := s.db.Query(r.Context(), `
+		SELECT DISTINCT lower(state)
+		FROM deployments
+		WHERE state IS NOT NULL AND status = ANY($1)
+		ORDER BY 1
+	`, publishedStatuses)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var code string
+		if err := rows.Scan(&code); err != nil {
+			return err
+		}
+		set.URLs = append(set.URLs, sitemapURL{
+			Loc: base + "/state/" + code,
+			// Weekly, matching the import cadence: the counts on these pages
+			// move whenever the refresh adds cameras.
+			ChangeFreq: "weekly",
+			Priority:   "0.8",
+		})
+	}
+	return rows.Err()
 }

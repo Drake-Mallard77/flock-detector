@@ -63,7 +63,7 @@ func TestSitemap(t *testing.T) {
 		}
 	}
 
-	for _, p := range []string{"/", "/deployments", "/methodology", "/submit"} {
+	for _, p := range []string{"/", "/deployments", "/states", "/methodology", "/submit"} {
 		if !locs["https://example.test"+p] {
 			t.Errorf("static route %s missing from the sitemap", p)
 		}
@@ -97,5 +97,59 @@ func TestSitemap_TrimsTrailingSlashInSiteURL(t *testing.T) {
 
 	if strings.Contains(rec.Body.String(), "example.test//") {
 		t.Error("produced a double slash in a loc")
+	}
+}
+
+// State pages are the entries a search engine can plausibly rank, so their
+// presence — and the absence of states with nothing published — is worth
+// asserting rather than assuming.
+func TestSitemap_IncludesStatePages(t *testing.T) {
+	s := newTestServer(t)
+	s.cfg.SiteURL = "https://example.test"
+
+	insert := func(state, status string) {
+		t.Helper()
+		_, err := testPool.Exec(context.Background(), `
+			INSERT INTO deployments (agency_name, city, state, status, evidence_type, source_links)
+			VALUES ($1, 'Somewhere', $2, $3, 'osm_import', ARRAY['https://example.test/src'])
+		`, "Agency "+state+status, state, status)
+		if err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+	insert("TN", "confirmed")
+	insert("TN", "osm_documented")
+	insert("CA", "contract_found")
+	// Only an unvetted candidate: this state must not get a page in the
+	// sitemap, for the same reason the record itself doesn't.
+	insert("WY", "under_review")
+
+	rec := doJSON(t, s.Router(), http.MethodGet, "/sitemap.xml", nil, "")
+	var set urlSet
+	if err := xml.Unmarshal(rec.Body.Bytes(), &set); err != nil {
+		t.Fatalf("not well-formed XML: %v", err)
+	}
+	locs := map[string]bool{}
+	for _, u := range set.URLs {
+		locs[u.Loc] = true
+	}
+
+	for _, want := range []string{"https://example.test/state/tn", "https://example.test/state/ca"} {
+		if !locs[want] {
+			t.Errorf("expected %s in the sitemap", want)
+		}
+	}
+	// One entry per state, not one per record: TN has two published records.
+	count := 0
+	for _, u := range set.URLs {
+		if u.Loc == "https://example.test/state/tn" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected exactly one /state/tn entry, got %d", count)
+	}
+	if locs["https://example.test/state/wy"] {
+		t.Error("a state with only unvetted candidates must not get a sitemap entry")
 	}
 }

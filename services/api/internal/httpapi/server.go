@@ -56,6 +56,10 @@ func (s *Server) Router() http.Handler {
 	// /sitemap.xml on the site origin to this.
 	r.Get("/sitemap.xml", s.handleSitemap)
 
+	// Aggregates behind the location index — the way into the atlas for a
+	// reader who has a place in mind rather than an agency name.
+	r.Get("/stats/states", s.handleStateStats)
+
 	r.Route("/deployments", func(r chi.Router) {
 		r.Get("/", s.handleListDeployments)
 		r.With(s.submissionLimiter.middleware).Post("/", s.handleCreateDeployment)

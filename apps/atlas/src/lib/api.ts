@@ -325,3 +325,17 @@ export interface DeploymentCameras {
 export function listDeploymentCameras(id: string) {
   return request<DeploymentCameras>(`/deployments/${encodeURIComponent(id)}/cameras`);
 }
+
+export interface StateStat {
+  /** Two-letter USPS code. */
+  state: string;
+  /** Published agency records only — the set the atlas stands behind. */
+  deployments: number;
+  /** Every imported camera in the state. */
+  cameras: number;
+}
+
+/** Per-state totals, for the location index. */
+export function listStateStats() {
+  return request<StateStat[]>("/stats/states");
+}

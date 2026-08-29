@@ -8,6 +8,8 @@ import DeploymentDetailPage from "./pages/DeploymentDetailPage";
 import DeploymentsPage from "./pages/DeploymentsPage";
 import MethodologyPage from "./pages/MethodologyPage";
 import NotFoundPage from "./pages/NotFoundPage";
+import StatePage from "./pages/StatePage";
+import StatesPage from "./pages/StatesPage";
 import ReviewDeskPage from "./pages/ReviewDeskPage";
 import SubmitPage from "./pages/SubmitPage";
 
@@ -31,6 +33,7 @@ export default function App() {
             Map
           </NavLink>
           <NavLink to="/deployments">Deployments</NavLink>
+          <NavLink to="/states">States</NavLink>
           {/* Methodology is intentionally not in the top nav — it's
               reference material, not a primary destination, and it was
               crowding Map/Deployments. Still linked from the footer and
@@ -55,6 +58,8 @@ export default function App() {
           />
           <Route path="/deployments" element={<DeploymentsPage />} />
           <Route path="/deployments/:id" element={<DeploymentDetailPage />} />
+          <Route path="/states" element={<StatesPage />} />
+          <Route path="/state/:code" element={<StatePage />} />
           <Route path="/methodology" element={<MethodologyPage />} />
           <Route path="/submit" element={<SubmitPage />} />
           {/* Not route-guarded: the page renders sign-in or an access
