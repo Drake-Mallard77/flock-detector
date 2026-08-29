@@ -1,5 +1,5 @@
-import { Suspense, lazy } from "react";
-import { NavLink, Route, Routes } from "react-router-dom";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 
 import ThemeToggle from "./components/ThemeToggle";
 import { useTheme } from "./lib/theme";
@@ -23,6 +23,49 @@ const MapPage = lazy(() => import("./pages/MapPage"));
 export default function App() {
   const { preference, setPreference } = useTheme();
 
+  // Collapsed navigation, phones only.
+  //
+  // The header was two rows and 144px on a 390px screen — a sixth of the
+  // viewport spent on chrome before any content, and on the map page that
+  // is 144px of map. CSS hides this button above the breakpoint, so the
+  // desktop header keeps every link visible: hiding navigation behind a
+  // click costs discoverability, and only earns it back where space is
+  // genuinely short.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const { pathname } = useLocation();
+
+  // Navigating closes the menu. Without this it stays open over the page
+  // you just asked for, which reads as the link having failed.
+  useEffect(() => setMenuOpen(false), [pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    function onKey(e: KeyboardEvent) {
+      // Escape is what people try first when a panel traps them, and
+      // returning focus to the button keeps keyboard users where they were.
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        toggleRef.current?.focus();
+      }
+    }
+    function onPointer(e: PointerEvent) {
+      const t = e.target as Node;
+      if (!navRef.current?.contains(t) && !toggleRef.current?.contains(t)) {
+        setMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+    };
+  }, [menuOpen]);
+
   return (
     <div className="layout">
       <header className="site-header">
@@ -30,7 +73,29 @@ export default function App() {
           FlockWatch
           <small>Public Records Atlas</small>
         </NavLink>
-        <nav className="site-nav">
+        <button
+          ref={toggleRef}
+          type="button"
+          className="nav-toggle"
+          aria-expanded={menuOpen}
+          aria-controls="site-nav"
+          aria-label={menuOpen ? "Close menu" : "Open menu"}
+          onClick={() => setMenuOpen((v) => !v)}
+        >
+          {/* Three bars drawn as spans rather than an icon font or an SVG
+              sprite: it is three rectangles, and a dependency for that
+              would be silly. aria-hidden because the button already has a
+              label — without it a screen reader announces nothing useful. */}
+          <span aria-hidden="true" />
+          <span aria-hidden="true" />
+          <span aria-hidden="true" />
+        </button>
+
+        <nav
+          id="site-nav"
+          ref={navRef}
+          className={menuOpen ? "site-nav is-open" : "site-nav"}
+        >
           <NavLink to="/" end>
             Map
           </NavLink>

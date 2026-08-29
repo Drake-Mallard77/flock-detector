@@ -289,6 +289,30 @@ export default function MapPage() {
       zoomControl: false,
     });
     L.control.zoom({ position: "topright" }).addTo(m);
+
+    // North indicator, stacked under the zoom buttons.
+    //
+    // A full compass rose would be decoration: this map is north-up and
+    // cannot rotate, so a needle would only ever point the same way. What
+    // does need stating is the frame of reference for the direction cones —
+    // a reader working out which road a camera watches has to know which
+    // way is north, and until now that was assumed.
+    //
+    // Registered as a Leaflet control rather than absolutely positioned, so
+    // it stacks with the zoom buttons instead of sitting at a hand-tuned
+    // offset that breaks whenever they change size.
+    const north = new L.Control({ position: "topright" });
+    north.onAdd = () => {
+      const el = L.DomUtil.create("div", "north-indicator");
+      el.innerHTML = '<span class="north-arrow">↑</span><span>N</span>';
+      // Static on a map that can't rotate, so it's noise to a screen
+      // reader; the bearing itself is available as text in each camera's
+      // popup, which is the accessible form of the same fact.
+      el.setAttribute("aria-hidden", "true");
+      return el;
+    };
+    north.addTo(m);
+
     map.current = m;
 
     const tiles = tileSet(theme === "dark" ? "Dark" : "Light");

@@ -1799,3 +1799,102 @@ button.primary:hover:not(:disabled) {
   line-height: 1.55;
   color: var(--text-muted);
 }
+
+/* North indicator, stacked under the zoom controls.
+   Matches Leaflet's own control chrome so it reads as part of the map
+   furniture rather than as content sitting on top of it. */
+.north-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 34px;
+  border: 2px solid rgb(0 0 0 / 0.2);
+  border-radius: 4px;
+  background: var(--overlay-bg);
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  /* Purely informational: it should never take a click aimed at the map or
+     at a camera behind it. */
+  pointer-events: none;
+  /* Leaflet gives controls a margin only on some sides; this keeps the gap
+     to the zoom buttons above consistent. */
+  margin-top: 6px;
+}
+
+.north-arrow {
+  font-size: 0.85rem;
+  line-height: 1;
+  color: var(--brand);
+}
+
+/* --- Collapsed navigation (phones) ------------------------------------
+   Hidden above the breakpoint: the desktop header fits every link on one
+   row, and putting navigation behind a click there would cost
+   discoverability to solve a problem that doesn't exist. */
+.nav-toggle {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .nav-toggle {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    /* 44px square: this is the control that replaces the whole nav, so it
+       has to be a comfortable target. */
+    width: 44px;
+    height: 44px;
+    margin-left: auto;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    cursor: pointer;
+  }
+
+  .nav-toggle span {
+    display: block;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--text);
+  }
+
+  /* Collapsed by default. display:none rather than visibility, so the links
+     are also out of the tab order while hidden — a keyboard user tabbing
+     into invisible navigation is worse than not having it. */
+  .site-nav {
+    display: none;
+  }
+
+  .site-nav.is-open {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 0;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .site-nav.is-open a {
+    padding: 0.15rem 0.25rem;
+    min-height: 44px;
+  }
+
+  .site-nav.is-open .cta {
+    margin-top: 0.4rem;
+    justify-content: center;
+  }
+
+  .site-nav.is-open .theme-toggle {
+    margin-top: 0.6rem;
+    align-self: flex-start;
+  }
+}
