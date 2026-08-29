@@ -54,7 +54,14 @@ const RAW_POINT_THRESHOLD = 2000;
 // Both switch together on purpose. A wedge is only meaningful once you can
 // see which road a camera watches, and a wedge without its own dot — which
 // is what clustering produces — is worse than no wedge at all.
-const WEDGE_MIN_ZOOM = 15;
+//
+// Raised from 15 to 16 after the first version made the map look empty. A
+// cluster bubble is large, filled and labelled; an individual dot is 6px.
+// Switching to dots at 15 traded a dense-looking city for a scattering of
+// faint marks, which reads as missing data even though it is strictly more
+// detail. 16 is where cameras are far enough apart that individual points
+// look deliberate rather than sparse.
+const WEDGE_MIN_ZOOM = 16;
 
 // Default view: the continental US.
 const DEFAULT_CENTER: [number, number] = [39.8, -98.5];
@@ -400,9 +407,13 @@ export default function MapPage() {
 
       const markers = cameras.map((c) => {
         const marker = L.circleMarker([c.lat, c.lng], {
-          radius: 5,
+          // Bumped from 5px with a heavier halo: once clustering stops,
+          // these are the only thing carrying the map, and at 5px against a
+          // pale basemap a full city block of cameras looked like empty
+          // space.
+          radius: 6,
           color: stroke,
-          weight: 1.5,
+          weight: 2,
           fillColor: fill,
           fillOpacity: 1,
         });
@@ -454,7 +465,7 @@ export default function MapPage() {
             fillColor: fill,
             // Faint: this is context around the dot, not a second dataset.
             // At full strength a dense street reads as a solid green smear.
-            fillOpacity: 0.28,
+            fillOpacity: 0.38,
             // The dot underneath stays the click target; the wedge would
             // otherwise swallow taps aimed at a camera behind it.
             interactive: false,
