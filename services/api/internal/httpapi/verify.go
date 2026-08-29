@@ -124,7 +124,24 @@ func (s *Server) handleVerifyDeployment(w http.ResponseWriter, r *http.Request) 
 	// coalesce keeps whatever the record already had when a field is
 	// omitted: a moderator attaching a contract shouldn't have to restate
 	// the camera count to avoid wiping it.
-	tag, err := s.db.Exec(r.Context(), `
+	// Read the prior status inside the transaction so the event records the
+	// transition rather than just the destination — "confirmed" tells you
+	// less than "osm_documented -> confirmed".
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		serverError(w, r, http.StatusInternalServerError, "could not save this verification", err)
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+
+	var fromStatus string
+	if err := tx.QueryRow(r.Context(),
+		`SELECT status FROM deployments WHERE id = $1`, id).Scan(&fromStatus); err != nil {
+		writeError(w, http.StatusNotFound, "deployment not found")
+		return
+	}
+
+	tag, err := tx.Exec(r.Context(), `
 		UPDATE deployments
 		SET status           = $2,
 		    evidence_type    = $3,
@@ -142,6 +159,19 @@ func (s *Server) handleVerifyDeployment(w http.ResponseWriter, r *http.Request) 
 	}
 	if tag.RowsAffected() == 0 {
 		writeError(w, http.StatusNotFound, "deployment not found")
+		return
+	}
+
+	// In the same transaction: a verification that commits without its audit
+	// entry is exactly the untraceable decision this table exists to prevent.
+	if err := recordEvent(r.Context(), tx, id.String(), "verified",
+		fromStatus, req.Status, req.EvidenceType, links, req.Notes, reviewerID); err != nil {
+		serverError(w, r, http.StatusInternalServerError, "could not save this verification", err)
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		serverError(w, r, http.StatusInternalServerError, "could not save this verification", err)
 		return
 	}
 

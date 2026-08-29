@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -201,6 +202,15 @@ func (s *Server) handleMergeDeployment(w http.ResponseWriter, r *http.Request) {
 	}
 	if retire.RowsAffected() == 0 {
 		writeError(w, http.StatusNotFound, "deployment not found")
+		return
+	}
+
+	// Same transaction as the retirement: a merged-away record whose history
+	// does not say where it went is the one case where the trail matters most.
+	note := "Merged into /state/" + strings.ToLower(survivorState) + "/" + survivorSlug
+	if err := recordEvent(r.Context(), tx, duplicateID.String(), "merged",
+		"", "removed", "", nil, &note, reviewerID); err != nil {
+		serverError(w, r, http.StatusInternalServerError, "could not merge these records", err)
 		return
 	}
 

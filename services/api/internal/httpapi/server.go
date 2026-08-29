@@ -62,6 +62,7 @@ func (s *Server) Router() http.Handler {
 	// What the atlas holds and what it cannot say — computed, so the
 	// uncomfortable figures stay current instead of drifting.
 	r.Get("/stats/coverage", s.handleCoverage)
+	r.Get("/stats/changes", s.handleChanges)
 
 	// Bulk downloads. The data is ODbL and the point of the project is that
 	// it be usable; serving the file beats being scraped for it.
@@ -81,6 +82,9 @@ func (s *Server) Router() http.Handler {
 		// The cameras attributed to one record. Keeps the map and the
 		// records from behaving as two unrelated datasets.
 		r.Get("/{id}/cameras", s.handleDeploymentCameras)
+		// Public: an audit trail only moderators can read is documentation,
+		// not accountability.
+		r.Get("/{id}/events", s.handleDeploymentEvents)
 		r.With(s.requireRole("moderator", "admin")).Post("/{id}/review", s.handleReviewDeployment)
 		// Promotes a published record to one backed by public records. Kept
 		// separate from /review because it demands the evidence, where
