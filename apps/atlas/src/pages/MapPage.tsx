@@ -49,6 +49,13 @@ const MAX_ZOOM = 19;
 // therefore wrong for one of them.
 const RAW_POINT_THRESHOLD = 2000;
 
+// Zoom at which cameras stop being clustered and direction wedges appear.
+//
+// Both switch together on purpose. A wedge is only meaningful once you can
+// see which road a camera watches, and a wedge without its own dot — which
+// is what clustering produces — is worse than no wedge at all.
+const WEDGE_MIN_ZOOM = 15;
+
 // Default view: the continental US.
 const DEFAULT_CENTER: [number, number] = [39.8, -98.5];
 const DEFAULT_ZOOM = 4;
@@ -197,6 +204,9 @@ export default function MapPage() {
   // marker per camera. The legend has to say which, or a bubble reading
   // "14k" looks like fourteen thousand individual dots failed to render.
   const [aggregated, setAggregated] = useState(false);
+  // Whether direction wedges are on screen right now, so the legend
+  // describes what is actually drawn rather than what might be.
+  const [showingWedges, setShowingWedges] = useState(false);
   // Phones only — CSS keeps the controls open and the toggle hidden on
   // wider screens, so this state is inert there.
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -257,6 +267,15 @@ export default function MapPage() {
     const cluster = L.markerClusterGroup({
       chunkedLoading: true,
       showCoverageOnHover: false,
+      // Below this, dots group into bubbles; at or above it every camera is
+      // drawn individually.
+      //
+      // It exists to keep the dots and the direction wedges telling the same
+      // story. Wedges live on a plain layer and are never absorbed into a
+      // bubble, so without a hard cut-off a street could show individual
+      // wedges floating beside clustered dots — the same cameras rendered
+      // two contradictory ways at once.
+      disableClusteringAtZoom: WEDGE_MIN_ZOOM,
     });
     clusterLayer.current = cluster;
     m.addLayer(cluster);
@@ -353,6 +372,7 @@ export default function MapPage() {
         drawClusterBubbles(summary);
         setCount(summary.total);
         setAggregated(true);
+        setShowingWedges(false);
         setError(null);
         return;
       }
@@ -420,7 +440,11 @@ export default function MapPage() {
       // Only for cameras that actually record a direction. Drawing a
       // default heading for the other 12% would invent a fact, on a map
       // whose whole claim is that it doesn't.
-      const wedgeLayer = aggregateLayer.current;
+      // Matched to the clustering cut-off above: below it the dots are
+      // grouped into bubbles, and loose wedges beside them would describe
+      // cameras the map is not individually showing.
+      const wedgeLayer = m.getZoom() >= WEDGE_MIN_ZOOM ? aggregateLayer.current : null;
+      setShowingWedges(Boolean(wedgeLayer));
       if (wedgeLayer) {
         for (const c of cameras) {
           if (c.direction === undefined || c.direction === null) continue;
@@ -627,7 +651,7 @@ export default function MapPage() {
         {/* Shown only when individual cameras are drawn — at aggregate zoom
             there are no wedges to explain, and a legend describing things
             that aren't on screen is just noise. */}
-        {!aggregated && (
+        {showingWedges && (
           <div className="legend-row">
             <span className="legend-wedge" />
             <span>Direction it faces, where recorded</span>
