@@ -49,20 +49,6 @@ const MAX_ZOOM = 19;
 // therefore wrong for one of them.
 const RAW_POINT_THRESHOLD = 2000;
 
-// Zoom at which cameras stop being clustered and direction wedges appear.
-//
-// Both switch together on purpose. A wedge is only meaningful once you can
-// see which road a camera watches, and a wedge without its own dot — which
-// is what clustering produces — is worse than no wedge at all.
-//
-// Raised from 15 to 16 after the first version made the map look empty. A
-// cluster bubble is large, filled and labelled; an individual dot is 6px.
-// Switching to dots at 15 traded a dense-looking city for a scattering of
-// faint marks, which reads as missing data even though it is strictly more
-// detail. 16 is where cameras are far enough apart that individual points
-// look deliberate rather than sparse.
-const WEDGE_MIN_ZOOM = 16;
-
 // Default view: the continental US.
 const DEFAULT_CENTER: [number, number] = [39.8, -98.5];
 const DEFAULT_ZOOM = 4;
@@ -178,6 +164,18 @@ function themeColor(name: string, fallback: string): string {
   return v || fallback;
 }
 
+/**
+ * Whether markercluster is currently drawing this marker on its own rather
+ * than hiding it inside a bubble.
+ *
+ * The cast is a typings gap, not a lie: /leaflet.markercluster declares
+ * getVisibleParent for L.Marker, while these are L.CircleMarker. Both are
+ * Layers and markercluster handles either at runtime.
+ */
+function isUnclustered(cluster: L.MarkerClusterGroup, marker: L.CircleMarker): boolean {
+  return cluster.getVisibleParent(marker as unknown as L.Marker) === (marker as unknown as L.Marker);
+}
+
 /** Escapes untrusted text before it goes into a Leaflet popup's HTML. */
 function escapeHtml(value: string): string {
   return value
@@ -274,15 +272,6 @@ export default function MapPage() {
     const cluster = L.markerClusterGroup({
       chunkedLoading: true,
       showCoverageOnHover: false,
-      // Below this, dots group into bubbles; at or above it every camera is
-      // drawn individually.
-      //
-      // It exists to keep the dots and the direction wedges telling the same
-      // story. Wedges live on a plain layer and are never absorbed into a
-      // bubble, so without a hard cut-off a street could show individual
-      // wedges floating beside clustered dots — the same cameras rendered
-      // two contradictory ways at once.
-      disableClusteringAtZoom: WEDGE_MIN_ZOOM,
     });
     clusterLayer.current = cluster;
     m.addLayer(cluster);
@@ -439,39 +428,53 @@ export default function MapPage() {
            }</div>
            ${recordLink}`,
         );
-        return marker;
+        return { camera: c, marker };
       });
-      cluster.addLayers(markers);
+      cluster.addLayers(markers.map((m2) => m2.marker));
 
-      // Direction wedges go on the plain layer, not into the cluster group.
+      // Direction wedges go on the plain layer, not into the cluster group:
       // markercluster hides a marker's geometry once it's absorbed into a
-      // bubble, so a clustered wedge would disappear while its dot stayed —
-      // and at these zooms the wedge is the informative half.
+      // bubble, so a wedge put inside would vanish with it.
       //
-      // Only for cameras that actually record a direction. Drawing a
-      // default heading for the other 12% would invent a fact, on a map
-      // whose whole claim is that it doesn't.
-      // Matched to the clustering cut-off above: below it the dots are
-      // grouped into bubbles, and loose wedges beside them would describe
-      // cameras the map is not individually showing.
-      const wedgeLayer = m.getZoom() >= WEDGE_MIN_ZOOM ? aggregateLayer.current : null;
-      setShowingWedges(Boolean(wedgeLayer));
+      // Which cameras get one is decided per marker, by asking markercluster
+      // whether that marker is currently standing on its own. Earlier
+      // versions tied wedges to a zoom threshold instead, and that was wrong
+      // in both directions at once: it hid wedges from isolated rural
+      // cameras that were never clustered, and it forced every camera to
+      // un-cluster at that zoom, which emptied out dense cities. Asking the
+      // question directly means a wedge appears exactly where a dot does,
+      // at any zoom.
+      //
+      // Only for cameras that record a direction. Drawing a default heading
+      // for the other 12% would invent a fact on a map whose whole claim is
+      // that it doesn't.
+      const wedgeLayer = aggregateLayer.current;
+      let drawn = 0;
       if (wedgeLayer) {
-        for (const c of cameras) {
-          if (c.direction === undefined || c.direction === null) continue;
-          L.polygon(directionWedge(c.lat, c.lng, Number(c.direction), wedgeRadiusM), {
-            color: fill,
-            weight: 0,
-            fillColor: fill,
-            // Faint: this is context around the dot, not a second dataset.
-            // At full strength a dense street reads as a solid green smear.
-            fillOpacity: 0.38,
-            // The dot underneath stays the click target; the wedge would
-            // otherwise swallow taps aimed at a camera behind it.
-            interactive: false,
-          }).addTo(wedgeLayer);
+        for (const { camera, marker } of markers) {
+          if (camera.direction === undefined || camera.direction === null) continue;
+          // getVisibleParent returns the cluster a marker is hidden inside,
+          // or the marker itself when it's drawn individually.
+          if (!isUnclustered(cluster, marker)) continue;
+
+          L.polygon(
+            directionWedge(camera.lat, camera.lng, Number(camera.direction), wedgeRadiusM),
+            {
+              color: fill,
+              weight: 0,
+              fillColor: fill,
+              // Faint: context around the dot, not a second dataset. At full
+              // strength a dense street reads as a solid green smear.
+              fillOpacity: 0.38,
+              // The dot underneath keeps the click; a wedge would otherwise
+              // swallow taps aimed at a camera behind it.
+              interactive: false,
+            },
+          ).addTo(wedgeLayer);
+          drawn++;
         }
       }
+      setShowingWedges(drawn > 0);
 
       setCount(cameras.length);
       setTruncated(cameras.length >= API_LIMIT);
