@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import "leaflet.markercluster";
 
@@ -342,6 +342,36 @@ export default function MapPage() {
     aggregateLayer.current = aggregates;
     m.addLayer(aggregates);
 
+    /**
+     * Take the map's markers out of the tab order.
+     *
+     * Leaflet makes every marker focusable, and markercluster builds its
+     * bubbles internally — they are ordinary L.Marker instances created
+     * without our options, so `keyboard: false` cannot reach them. The
+     * result was 26 tab stops at the national view, announced as "23k",
+     * "18k", "17k"…: a keyboard user needed 41 presses to cross the map
+     * and the stops told them nothing when they got there. Zoomed in it
+     * is worse, because the count rises with the number of clusters.
+     *
+     * The same records are on /deployments as a searchable, sortable
+     * table, linked from the visually hidden note above the map, so the
+     * data stays reachable — WCAG wants an equivalent path, not this
+     * exact one. The honest trade: a keyboard user can no longer open a
+     * marker popup from the map. Nothing is lost that the list and the
+     * record pages do not carry, and 136,000 tab stops were never a way
+     * to reach any of it.
+     */
+    const stripMarkerTabStops = () => {
+      m.getContainer()
+        .querySelectorAll<HTMLElement>(".leaflet-marker-icon[tabindex]")
+        .forEach((el) => el.setAttribute("tabindex", "-1"));
+    };
+
+    // Cluster bubbles are rebuilt on every zoom and on each chunk of a
+    // chunked load, so one pass at startup would not hold.
+    m.on("zoomend moveend layeradd", stripMarkerTabStops);
+    cluster.on("animationend", stripMarkerTabStops);
+
     // Leaflet measures its container on init; this page is lazy-loaded, so
     // it can mount before layout settles. Observing the container covers
     // that plus later changes (rotation, mobile toolbars collapsing).
@@ -463,6 +493,8 @@ export default function MapPage() {
         // hides or shows both together because they are the same object, and
         // the wedge is automatically a constant size on screen.
         const marker = L.marker([c.lat, c.lng], {
+          // Not a tab stop. See stripMarkerTabStops.
+          keyboard: false,
           icon: cameraIcon(
             c.direction === undefined || c.direction === null ? null : Number(c.direction),
             fill,
@@ -540,6 +572,8 @@ export default function MapPage() {
             : String(c.count);
 
       return L.marker([c.lat, c.lng], {
+        // Not a tab stop. See stripMarkerTabStops.
+        keyboard: false,
         icon: L.divIcon({
           html: `<div><span>${label}</span></div>`,
           className: `marker-cluster marker-cluster-${size}`,
@@ -647,7 +681,30 @@ export default function MapPage() {
 
   return (
     <div className="map-wrap">
-      <div className="map-root" ref={container} />
+      {/* This was the only page in the site with no h1 — the map filled the
+          viewport and the legend's h2 was the first heading, so anyone
+          navigating by headings landed mid-page with no idea what the page
+          was. Visually hidden because the map is self-evidently the content
+          on screen; a printed title would only eat map. */}
+      <h1 className="sr-only">Map of documented ALPR camera locations</h1>
+
+      {/* The map's markers are deliberately not in the tab order (see
+          stripMarkerTabStops), so this states where the same data lives in
+          a form that is actually navigable. It is the accessible
+          equivalent, not an apology for the map — the table is searchable
+          and sortable, which 136,000 tab stops would never be. */}
+      <p className="sr-only">
+        This map is a visual view of the camera data. For a searchable,
+        keyboard-navigable version of the same records, use the{" "}
+        <Link to="/deployments">Deployments list</Link>.
+      </p>
+
+      <div
+        className="map-root"
+        ref={container}
+        role="region"
+        aria-label="Map of documented ALPR camera locations. Pan with the arrow keys; zoom with the plus and minus keys."
+      />
 
       <div className={`map-filters${filtersOpen ? " is-open" : ""}`}>
         {/* Collapsed by default on phones, where the filter panel covered
@@ -750,7 +807,14 @@ export default function MapPage() {
             </button>
           </div>
         )}
-        <p className="legend-note">
+        {/* The page had no live region at all, so every asynchronous
+            change was silent: "Loading…" finishing, a fetch failing, the
+            count changing after a pan, a filter taking effect. A sighted
+            user sees this line update; a screen-reader user was told
+            nothing and had no reason to come back and re-read it.
+            role="status" is polite — it waits for a pause rather than
+            interrupting, which suits a count that changes on every pan. */}
+        <p className="legend-note" role="status">
           {error
             ? error
             : count === null

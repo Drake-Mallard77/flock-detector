@@ -68,6 +68,14 @@ export default function App() {
 
   return (
     <div className="layout">
+      {/* First focusable thing on every page. The map is 41 tab stops
+          wide — every cluster bubble is a stop — so without this a
+          keyboard user had to cross the entire map to reach anything
+          below it. Hidden until focused, so it costs sighted users
+          nothing. */}
+      <a className="skip-link" href="#main">
+        Skip to main content
+      </a>
       <header className="site-header">
         <NavLink to="/" className="brand">
           FlockWatch
@@ -113,7 +121,10 @@ export default function App() {
         </nav>
       </header>
 
-      <main>
+      {/* tabIndex -1 so the skip link can move focus here, not just scroll.
+          Without it the browser scrolls but focus stays behind, and the
+          next Tab returns to the header — the link appears to do nothing. */}
+      <main id="main" tabIndex={-1}>
         <Routes>
           <Route
             path="/"

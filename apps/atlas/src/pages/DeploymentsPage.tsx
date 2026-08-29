@@ -150,8 +150,11 @@ export default function DeploymentsPage() {
         />
       </div>
 
+      {/* role="alert" rather than "status": a failed fetch means the list
+          on screen is not the list you asked for, and that is worth
+          interrupting for. The count announcement below stays polite. */}
       {error && (
-        <div className="notice error">
+        <div className="notice error" role="alert">
           {error}{" "}
           {/* Without this a transient failure looks permanent and the only
               way forward is a page reload. */}
@@ -162,6 +165,18 @@ export default function DeploymentsPage() {
       )}
 
       {!error && rows === null && <p className="state">Loading records…</p>}
+
+      {/* The search filters as you type and the status tabs refilter on
+          click. Both rewrite the table silently — a sighted user watches
+          the rows change, a screen-reader user got no signal that
+          anything had happened and would have to go hunting through the
+          table to find out. Announcing the count is the cheapest honest
+          answer to "did that do anything?". */}
+      <p className="sr-only" role="status">
+        {rows === null
+          ? "Loading records"
+          : `${visible?.length ?? 0} ${visible?.length === 1 ? "record" : "records"} shown`}
+      </p>
 
       {visible && visible.length === 0 && (
         <div className="state">
