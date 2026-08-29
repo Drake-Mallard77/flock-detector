@@ -4,7 +4,6 @@ import L from "leaflet";
 import "leaflet.markercluster";
 
 import PlaceSearch from "../components/PlaceSearch";
-import { directionWedge, metresPerPixel } from "../lib/geo";
 import { useTheme } from "../lib/theme";
 
 import {
@@ -164,16 +163,49 @@ function themeColor(name: string, fallback: string): string {
   return v || fallback;
 }
 
+// Icon box, in CSS pixels. Big enough for the wedge to read, small enough
+// that a dense street doesn't become one solid mass.
+const CAMERA_ICON_SIZE = 34;
+
 /**
- * Whether markercluster is currently drawing this marker on its own rather
- * than hiding it inside a bubble.
+ * One camera: a dot, plus a wedge showing which way it faces.
  *
- * The cast is a typings gap, not a lie: the markercluster type definitions
- * declare getVisibleParent for L.Marker, while these are L.CircleMarker.
- * Both are Layers and markercluster handles either at runtime.
+ * Drawn as a single inline SVG icon rather than as two map layers, so
+ * markercluster treats the pair as one object. The wedge is a path inside
+ * the icon, so it cannot be left behind when the dot is absorbed into a
+ * bubble — which is the failure the two-layer version kept producing.
+ *
+ * A null bearing draws the dot alone. About 12% of imported cameras record
+ * no direction, and giving them a default heading would put a fact on the
+ * map that nobody observed.
  */
-function isUnclustered(cluster: L.MarkerClusterGroup, marker: L.CircleMarker): boolean {
-  return cluster.getVisibleParent(marker as unknown as L.Marker) === (marker as unknown as L.Marker);
+function cameraIcon(bearing: number | null, fill: string, stroke: string): L.DivIcon {
+  const c = CAMERA_ICON_SIZE / 2;
+  const r = c - 3;
+  const spread = 55;
+  // The wedge is built pointing north from the centre and then rotated into
+  // place, which is far easier to reason about than solving the arc at an
+  // arbitrary bearing.
+  const a1 = ((-spread / 2 - 90) * Math.PI) / 180;
+  const a2 = ((spread / 2 - 90) * Math.PI) / 180;
+  const wedge =
+    bearing === null
+      ? ""
+      : `<path d="M ${c} ${c} L ${c + r * Math.cos(a1)} ${c + r * Math.sin(a1)} ` +
+        `A ${r} ${r} 0 0 1 ${c + r * Math.cos(a2)} ${c + r * Math.sin(a2)} Z" ` +
+        `fill="${fill}" fill-opacity="0.38" transform="rotate(${bearing} ${c} ${c})" />`;
+
+  return L.divIcon({
+    className: "camera-icon",
+    iconSize: [CAMERA_ICON_SIZE, CAMERA_ICON_SIZE],
+    iconAnchor: [c, c],
+    html:
+      `<svg width="${CAMERA_ICON_SIZE}" height="${CAMERA_ICON_SIZE}" ` +
+      `viewBox="0 0 ${CAMERA_ICON_SIZE} ${CAMERA_ICON_SIZE}">` +
+      wedge +
+      `<circle cx="${c}" cy="${c}" r="5" fill="${fill}" stroke="${stroke}" stroke-width="2" />` +
+      `</svg>`,
+  });
 }
 
 /** Escapes untrusted text before it goes into a Leaflet popup's HTML. */
@@ -199,10 +231,6 @@ export default function MapPage() {
   const refetchTimer = useRef<number | undefined>(undefined);
   // Guards against out-of-order responses; see loadCameras.
   const loadToken = useRef(0);
-  // Draws the direction wedges for the markers most recently added. Held in
-  // a ref because the cluster group's chunkProgress callback is registered
-  // once, when the map is created, and needs to reach the current one.
-  const drawWedges = useRef<(() => void) | null>(null);
   const baseLayer = useRef<L.TileLayer | null>(null);
   const labelLayer = useRef<L.TileLayer | null>(null);
   const { active: theme } = useTheme();
@@ -276,13 +304,6 @@ export default function MapPage() {
     const cluster = L.markerClusterGroup({
       chunkedLoading: true,
       showCoverageOnHover: false,
-      // Clustering is only settled once the final chunk is in, so this is
-      // where the direction wedges can ask which markers ended up standing
-      // alone. Registered here rather than after addLayers because that
-      // returns before the work is done.
-      chunkProgress: (processed: number, total: number) => {
-        if (processed >= total) drawWedges.current?.();
-      },
     });
     clusterLayer.current = cluster;
     m.addLayer(cluster);
@@ -397,25 +418,28 @@ export default function MapPage() {
       const stroke = themeColor("--bg", "#ffffff");
       const fill = themeColor("--status-confirmed", "#1b6b4a");
 
-      // Wedges are sized in metres to land at a constant number of pixels,
-      // so they stay legible as you zoom rather than vanishing or swamping
-      // the map. Computed once per load from the viewport centre: over a
-      // single screen the latitude term barely moves, and doing it per
-      // camera would be thousands of cos() calls for a sub-pixel
-      // difference.
-      const wedgeRadiusM = metresPerPixel(m.getCenter().lat, m.getZoom()) * 22;
 
       const markers = cameras.map((c) => {
-        const marker = L.circleMarker([c.lat, c.lng], {
-          // Bumped from 5px with a heavier halo: once clustering stops,
-          // these are the only thing carrying the map, and at 5px against a
-          // pale basemap a full city block of cameras looked like empty
-          // space.
-          radius: 6,
-          color: stroke,
-          weight: 2,
-          fillColor: fill,
-          fillOpacity: 1,
+        // The dot and its direction wedge are one marker, drawn as a single
+        // icon.
+        //
+        // They were two layers before — a CircleMarker in the cluster group
+        // and a polygon on a plain layer — which meant something had to keep
+        // them in step as markercluster absorbed and released markers.
+        // Nothing could: getVisibleParent only answers for icon markers, and
+        // map.hasLayer is false for anything a cluster group owns. Three
+        // attempts at coordinating them produced, in order, wedges beside
+        // clustered dots, wedges missing at mid zoom, and no wedges at all.
+        //
+        // Making the wedge part of the icon removes the question. Clustering
+        // hides or shows both together because they are the same object, and
+        // the wedge is automatically a constant size on screen.
+        const marker = L.marker([c.lat, c.lng], {
+          icon: cameraIcon(
+            c.direction === undefined || c.direction === null ? null : Number(c.direction),
+            fill,
+            stroke,
+          ),
         });
         const heading =
           c.direction !== undefined && c.direction !== null
@@ -441,59 +465,16 @@ export default function MapPage() {
         );
         return { camera: c, marker };
       });
-      cluster.addLayers(markers.map((m2) => m2.marker));
 
-      // Direction wedges go on the plain layer, not into the cluster group:
-      // markercluster hides a marker's geometry once it's absorbed into a
-      // bubble, so a wedge put inside would vanish with it.
-      //
-      // Which cameras get one is decided per marker, by asking markercluster
-      // whether that marker is currently standing on its own. Earlier
-      // versions tied wedges to a zoom threshold instead, and that was wrong
-      // in both directions at once: it hid wedges from isolated rural
-      // cameras that were never clustered, and it forced every camera to
-      // un-cluster at that zoom, which emptied out dense cities. Asking the
-      // question directly means a wedge appears exactly where a dot does,
-      // at any zoom.
-      //
-      // Only for cameras that record a direction. Drawing a default heading
-      // for the other 12% would invent a fact on a map whose whole claim is
-      // that it doesn't.
-      // Deferred until markercluster has finished building its tree.
-      //
-      // chunkedLoading spreads addLayers across timeouts, so immediately
-      // after the call getVisibleParent has nothing to answer with and
-      // reports every marker as clustered — which is why the first version
-      // of this drew no wedges at all. chunkProgress fires when the last
-      // chunk lands; that's the point the question can be asked.
-      drawWedges.current = () => {
-        const wedgeLayer = aggregateLayer.current;
-        if (!wedgeLayer) return;
-        let drawn = 0;
-        for (const { camera, marker } of markers) {
-          if (camera.direction === undefined || camera.direction === null) continue;
-          // getVisibleParent returns the cluster a marker is hidden inside,
-          // or the marker itself when it's drawn individually.
-          if (!isUnclustered(cluster, marker)) continue;
+      // The icon already carries the wedge, so markercluster showing or
+      // hiding a marker takes the direction with it. Nothing to keep in
+      // step, and nothing to defer until clustering settles.
+      cluster.addLayers(markers.map((entry) => entry.marker));
 
-          L.polygon(
-            directionWedge(camera.lat, camera.lng, Number(camera.direction), wedgeRadiusM),
-            {
-              color: fill,
-              weight: 0,
-              fillColor: fill,
-              // Faint: context around the dot, not a second dataset. At full
-              // strength a dense street reads as a solid green smear.
-              fillOpacity: 0.38,
-              // The dot underneath keeps the click; a wedge would otherwise
-              // swallow taps aimed at a camera behind it.
-              interactive: false,
-            },
-          ).addTo(wedgeLayer);
-          drawn++;
-        }
-        setShowingWedges(drawn > 0);
-      };
+      // The legend explains the wedge only when some camera on screen has
+      // one. Most do; the ones that do not are simply a dot, and describing
+      // a symbol that is not present is just noise.
+      setShowingWedges(cameras.some((c) => c.direction !== undefined && c.direction !== null));
 
       setCount(cameras.length);
       setTruncated(cameras.length >= API_LIMIT);

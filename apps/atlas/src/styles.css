@@ -1528,3 +1528,11 @@ button.primary:hover:not(:disabled) {
   color: var(--brand);
   cursor: pointer;
 }
+
+/* Camera markers are inline SVG icons carrying both the dot and its
+   direction wedge, so markercluster shows or hides the pair together.
+   Leaflet's default divIcon chrome would draw a box around that. */
+.camera-icon {
+  background: transparent;
+  border: 0;
+}
