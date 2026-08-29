@@ -427,3 +427,22 @@ export function verifyDeployment(id: string, body: VerifyRequest) {
     body: JSON.stringify(body),
   });
 }
+
+export interface Coverage {
+  cameras: number;
+  /** Carry an operator tag in OSM; the rest can't be attributed to anyone. */
+  cameras_with_operator: number;
+  cameras_with_direction: number;
+  /** Attached to a published record. */
+  cameras_linked: number;
+  published_records: number;
+  /** Checked against a council report, contract, invoice, article or FOIA. */
+  verified_records: number;
+  states: number;
+  last_import?: string;
+}
+
+/** What the atlas holds, and what it can't say. Computed, never hand-written. */
+export function getCoverage() {
+  return request<Coverage>("/stats/coverage");
+}

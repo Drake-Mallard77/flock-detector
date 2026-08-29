@@ -63,7 +63,7 @@ func TestSitemap(t *testing.T) {
 		}
 	}
 
-	for _, p := range []string{"/", "/deployments", "/states", "/methodology", "/submit"} {
+	for _, p := range []string{"/", "/deployments", "/states", "/coverage", "/methodology", "/submit"} {
 		if !locs["https://example.test"+p] {
 			t.Errorf("static route %s missing from the sitemap", p)
 		}

@@ -1654,3 +1654,34 @@ button.primary:hover:not(:disabled) {
   font-size: 0.75rem;
   color: var(--text-muted);
 }
+
+/* --- Coverage page ---------------------------------------------------- */
+.coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.6rem;
+  margin: 0 0 2rem;
+}
+
+.coverage-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brand);
+  border-radius: 6px;
+  background: var(--bg-subtle);
+}
+
+.coverage-stat strong {
+  font-size: 1.5rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.coverage-stat span {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}

@@ -47,6 +47,7 @@ var staticRoutes = []struct {
 	{"/", "daily", "1.0"},
 	{"/deployments", "daily", "0.9"},
 	{"/states", "weekly", "0.8"},
+	{"/coverage", "weekly", "0.6"},
 	{"/methodology", "monthly", "0.5"},
 	{"/submit", "monthly", "0.5"},
 }

@@ -59,6 +59,9 @@ func (s *Server) Router() http.Handler {
 	// Aggregates behind the location index — the way into the atlas for a
 	// reader who has a place in mind rather than an agency name.
 	r.Get("/stats/states", s.handleStateStats)
+	// What the atlas holds and what it cannot say — computed, so the
+	// uncomfortable figures stay current instead of drifting.
+	r.Get("/stats/coverage", s.handleCoverage)
 
 	// Bulk downloads. The data is ODbL and the point of the project is that
 	// it be usable; serving the file beats being scraped for it.

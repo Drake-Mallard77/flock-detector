@@ -6,6 +6,7 @@ import { useTheme } from "./lib/theme";
 
 import DeploymentDetailPage from "./pages/DeploymentDetailPage";
 import DeploymentsPage from "./pages/DeploymentsPage";
+import CoveragePage from "./pages/CoveragePage";
 import MethodologyPage from "./pages/MethodologyPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import StatePage from "./pages/StatePage";
@@ -63,6 +64,7 @@ export default function App() {
           <Route path="/state/:code/:slug" element={<DeploymentDetailPage />} />
           <Route path="/states" element={<StatesPage />} />
           <Route path="/state/:code" element={<StatePage />} />
+          <Route path="/coverage" element={<CoveragePage />} />
           <Route path="/methodology" element={<MethodologyPage />} />
           <Route path="/submit" element={<SubmitPage />} />
           {/* Not route-guarded: the page renders sign-in or an access
@@ -88,7 +90,8 @@ export default function App() {
           <a href="https://opendatacommons.org/licenses/odbl/" target="_blank" rel="noopener noreferrer">
             Open Database License (ODbL)
           </a>
-          . See <NavLink to="/methodology">Methodology</NavLink>.
+          . See <NavLink to="/methodology">Methodology</NavLink> and{" "}
+          <NavLink to="/coverage">Coverage</NavLink>.
         </p>
       </footer>
     </div>
