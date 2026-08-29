@@ -74,8 +74,12 @@ func IsValidDeploymentStatus(v string) bool {
 // Deployment is the primary, agency/contract-level record: what FlockWatch's
 // "Public Records Atlas" shows by default, at city-level precision.
 type Deployment struct {
-	ID              string       `json:"id"`
-	AgencyName      string       `json:"agency_name"`
+	ID         string `json:"id"`
+	AgencyName string `json:"agency_name"`
+	// Slug is the record's readable URL segment, unique within its state.
+	// Sent with every record so a list can link to canonical URLs without a
+	// second lookup per row.
+	Slug            string       `json:"slug"`
 	City            string       `json:"city"`
 	State           string       `json:"state"`
 	County          *string      `json:"county,omitempty"`

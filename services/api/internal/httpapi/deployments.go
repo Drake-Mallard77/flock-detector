@@ -44,7 +44,7 @@ func (s *Server) handleListDeployments(w http.ResponseWriter, r *http.Request) {
 	search := strings.TrimSpace(q.Get("q"))
 
 	sql := `
-		SELECT id, agency_name, city, state, county,
+		SELECT id, agency_name, slug, city, state, county,
 		       ST_Y(location::geometry), ST_X(location::geometry),
 		       documented_units, evidence_type, source_links, status, notes,
 		       operator_type,
@@ -87,7 +87,7 @@ func (s *Server) handleGetDeployment(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	row := s.db.QueryRow(r.Context(), `
-		SELECT id, agency_name, city, state, county,
+		SELECT id, agency_name, slug, city, state, county,
 		       ST_Y(location::geometry), ST_X(location::geometry),
 		       documented_units, evidence_type, source_links, status, notes,
 		       operator_type,
@@ -206,7 +206,7 @@ type row interface {
 func scanDeployment(r row) (models.Deployment, error) {
 	var d models.Deployment
 	err := r.Scan(
-		&d.ID, &d.AgencyName, &d.City, &d.State, &d.County,
+		&d.ID, &d.AgencyName, &d.Slug, &d.City, &d.State, &d.County,
 		&d.Lat, &d.Lng,
 		&d.DocumentedUnits, &d.EvidenceType, &d.SourceLinks, &d.Status, &d.Notes,
 		&d.OperatorType,

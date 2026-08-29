@@ -29,11 +29,11 @@ func TestSitemap(t *testing.T) {
 
 	published := map[string]string{}
 	for _, st := range []string{"confirmed", "contract_found", "osm_documented"} {
-		published[st] = insert(st)
+		published[st] = slugOf(t, insert(st))
 	}
 	hidden := map[string]string{}
 	for _, st := range []string{"under_review", "disputed", "removed"} {
-		hidden[st] = insert(st)
+		hidden[st] = slugOf(t, insert(st))
 	}
 
 	rec := doJSON(t, h, http.MethodGet, "/sitemap.xml", nil, "")
@@ -74,15 +74,15 @@ func TestSitemap(t *testing.T) {
 		t.Error("/review must not be in the sitemap")
 	}
 
-	for st, id := range published {
-		if !locs["https://example.test/deployments/"+id] {
+	for st, slug := range published {
+		if !locs["https://example.test/state/il/"+slug] {
 			t.Errorf("%s record should be listed", st)
 		}
 	}
 	// The point of the status filter: unvetted, contested, and retracted
 	// records naming real agencies are not promoted to search engines.
-	for st, id := range hidden {
-		if locs["https://example.test/deployments/"+id] {
+	for st, slug := range hidden {
+		if locs["https://example.test/state/il/"+slug] {
 			t.Errorf("%s record must not be listed in the sitemap", st)
 		}
 	}
@@ -152,4 +152,18 @@ func TestSitemap_IncludesStatePages(t *testing.T) {
 	if locs["https://example.test/state/wy"] {
 		t.Error("a state with only unvetted candidates must not get a sitemap entry")
 	}
+}
+
+// slugOf reads back the slug the database generated for a record, so the
+// tests assert on the URL the app will actually serve rather than on a slug
+// recomputed here from the same inputs — which would pass even if the
+// generation rule changed on both sides.
+func slugOf(t *testing.T, id string) string {
+	t.Helper()
+	var slug string
+	if err := testPool.QueryRow(context.Background(),
+		`SELECT slug FROM deployments WHERE id = $1`, id).Scan(&slug); err != nil {
+		t.Fatalf("read slug for %s: %v", id, err)
+	}
+	return slug
 }

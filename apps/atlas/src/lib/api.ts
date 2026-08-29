@@ -28,6 +28,8 @@ export type EvidenceType =
 export interface Deployment {
   id: string;
   agency_name: string;
+  /** Readable URL segment, unique within the state. */
+  slug: string;
   city: string;
   state: string;
   county?: string;
@@ -338,4 +340,22 @@ export interface StateStat {
 /** Per-state totals, for the location index. */
 export function listStateStats() {
   return request<StateStat[]>("/stats/states");
+}
+
+/**
+ * Resolves a record from its readable URL.
+ *
+ * The UUID form still works and always will — links to it are already
+ * published and indexed, and a public-records project breaking its own
+ * citations to tidy up URLs would be a poor trade.
+ */
+export function getDeploymentBySlug(state: string, slug: string) {
+  return request<Deployment>(
+    `/deployments/by-slug/${encodeURIComponent(state)}/${encodeURIComponent(slug)}`,
+  );
+}
+
+/** Canonical path for a record. */
+export function recordPath(d: Pick<Deployment, "state" | "slug">) {
+  return `/state/${d.state.toLowerCase()}/${d.slug}`;
 }

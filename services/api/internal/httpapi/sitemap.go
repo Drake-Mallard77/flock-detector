@@ -95,7 +95,7 @@ func (s *Server) handleSitemap(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := s.db.Query(r.Context(), `
-		SELECT id, greatest(coalesce(last_reviewed_at, updated_at), updated_at)
+		SELECT lower(state), slug, greatest(coalesce(last_reviewed_at, updated_at), updated_at)
 		FROM deployments
 		WHERE status = ANY($1)
 		ORDER BY updated_at DESC
@@ -108,14 +108,17 @@ func (s *Server) handleSitemap(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	for rows.Next() {
-		var id string
+		var state, slug string
 		var lastmod time.Time
-		if err := rows.Scan(&id, &lastmod); err != nil {
+		if err := rows.Scan(&state, &slug, &lastmod); err != nil {
 			serverError(w, r, http.StatusInternalServerError, "could not build the sitemap", err)
 			return
 		}
 		set.URLs = append(set.URLs, sitemapURL{
-			Loc: base + "/deployments/" + id,
+			// Readable URL, matching the app route. The UUID form still
+			// resolves and redirects here, but the sitemap should advertise
+			// the address worth indexing.
+			Loc: base + "/state/" + state + "/" + slug,
 			// Date only: the spec allows it, and it avoids implying a record
 			// changed at a precision we don't actually track.
 			LastMod:    lastmod.UTC().Format("2006-01-02"),

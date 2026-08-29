@@ -5,6 +5,7 @@ import StatusBadge from "../components/StatusBadge";
 import {
   listDeployments,
   listStateStats,
+  recordPath,
   type Deployment,
   type StateStat,
 } from "../lib/api";
@@ -106,7 +107,7 @@ export default function StatePage() {
               {published.map((r) => (
                 <tr key={r.id}>
                   <td>
-                    <Link to={`/deployments/${r.id}`}>
+                    <Link to={recordPath(r)}>
                       {r.city}, {r.state}
                     </Link>
                   </td>

@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import StatusBadge from "../components/StatusBadge";
-import { listDeployments, type Deployment, type DeploymentStatus } from "../lib/api";
+import {
+  listDeployments,
+  recordPath,
+  type Deployment,
+  type DeploymentStatus,
+} from "../lib/api";
 
 const TABS: Array<{ value: DeploymentStatus | "all"; label: string }> = [
   { value: "all", label: "All records" },
@@ -142,7 +147,7 @@ export default function DeploymentsPage() {
               {visible.map((d) => (
                 <tr key={d.id}>
                   <td>
-                    <Link to={`/deployments/${d.id}`}>
+                    <Link to={recordPath(d)}>
                       {d.city}, {d.state}
                     </Link>
                   </td>

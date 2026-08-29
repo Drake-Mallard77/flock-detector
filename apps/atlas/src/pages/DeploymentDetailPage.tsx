@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 // Lazy, because RecordMap pulls in Leaflet. Imported eagerly it landed
 // Leaflet in the main bundle — 82KB to 127KB gzipped on every page,
@@ -10,7 +10,9 @@ import StatusBadge from "../components/StatusBadge";
 import {
   ApiError,
   getDeployment,
+  getDeploymentBySlug,
   listDeploymentCameras,
+  recordPath,
   type Deployment,
   type DeploymentCameras,
 } from "../lib/api";
@@ -26,18 +28,32 @@ const EVIDENCE_LABELS: Record<string, string> = {
 };
 
 export default function DeploymentDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  // Serves both routes: /deployments/:id (the original, permanent form) and
+  // /state/:code/:slug (readable, and what the sitemap advertises).
+  const { id, code, slug } = useParams<{ id: string; code: string; slug: string }>();
+  const navigate = useNavigate();
   const [record, setRecord] = useState<Deployment | null>(null);
   const [cameras, setCameras] = useState<DeploymentCameras | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id) return;
     let cancelled = false;
 
-    getDeployment(id)
+    const load = id
+      ? getDeployment(id)
+      : code && slug
+        ? getDeploymentBySlug(code, slug)
+        : null;
+    if (!load) return;
+
+    load
       .then((d) => {
-        if (!cancelled) setRecord(d);
+        if (cancelled) return;
+        setRecord(d);
+        // Arrived by UUID: send the reader to the canonical address.
+        // replace, not push, so Back returns wherever they came from rather
+        // than to the UUID URL that immediately redirects again.
+        if (id) navigate(recordPath(d), { replace: true });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -50,10 +66,22 @@ export default function DeploymentDetailPage() {
         );
       });
 
-    // Fetched separately and allowed to fail quietly. The record is the
-    // page; its map is an enhancement, and a failure here shouldn't replace
-    // a readable record with an error.
-    listDeploymentCameras(id)
+    return () => {
+      cancelled = true;
+    };
+  }, [id, code, slug, navigate]);
+
+  // Keyed on the resolved record rather than the URL, because the readable
+  // route carries a slug and the cameras endpoint takes an id.
+  //
+  // Allowed to fail quietly: the record is the page, its map is an
+  // enhancement, and a failure here shouldn't replace a readable record
+  // with an error.
+  useEffect(() => {
+    if (!record) return;
+    let cancelled = false;
+
+    listDeploymentCameras(record.id)
       .then((c) => {
         if (!cancelled) setCameras(c);
       })
@@ -64,7 +92,7 @@ export default function DeploymentDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [record]);
 
   if (error) {
     return (

@@ -90,11 +90,27 @@ func Create(ctx context.Context, pool *pgxpool.Pool, c Candidate, city string) (
 	// for review rather than a published record.
 	operatorType := importer.ClassifyOperator(c.Operator)
 
+	// Identity match strips every non-alphanumeric character, not just case.
+	//
+	// lower() alone let a punctuation variant through and duplicated records
+	// that were already published: OpenStreetMap carries both "Sheriff's
+	// Office" and "Sheriff’s Office" (U+2019), and the camera importer
+	// canonicalises the curly form to straight while records created before
+	// that kept the curly one. The names then never compared equal, so every
+	// weekly run proposed a fresh candidate for an agency already in the
+	// atlas — nine of them by the time this was noticed.
+	//
+	// Stripping punctuation entirely also folds "St. Johns" with "St Johns"
+	// and "P.D." with "PD", which are the same agency written differently.
+	// It cannot merge genuinely distinct agencies: two bodies whose names
+	// differ only in punctuation are one body spelled two ways.
 	var exists bool
 	if err := pool.QueryRow(ctx, `
 		SELECT EXISTS(
 			SELECT 1 FROM deployments
-			WHERE lower(agency_name) = lower($1) AND state = $2
+			WHERE state = $2
+			  AND regexp_replace(lower(agency_name), '[^a-z0-9]+', '', 'g')
+			    = regexp_replace(lower($1), '[^a-z0-9]+', '', 'g')
 		)
 	`, c.Operator, c.State).Scan(&exists); err != nil {
 		return false, fmt.Errorf("check existing: %w", err)

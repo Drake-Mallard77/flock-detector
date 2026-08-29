@@ -58,6 +58,9 @@ export default function App() {
           />
           <Route path="/deployments" element={<DeploymentsPage />} />
           <Route path="/deployments/:id" element={<DeploymentDetailPage />} />
+          {/* Readable form. The UUID route above stays permanently — it is
+              already published and indexed — and redirects here. */}
+          <Route path="/state/:code/:slug" element={<DeploymentDetailPage />} />
           <Route path="/states" element={<StatesPage />} />
           <Route path="/state/:code" element={<StatePage />} />
           <Route path="/methodology" element={<MethodologyPage />} />

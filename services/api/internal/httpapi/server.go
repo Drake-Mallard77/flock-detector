@@ -63,6 +63,9 @@ func (s *Server) Router() http.Handler {
 	r.Route("/deployments", func(r chi.Router) {
 		r.Get("/", s.handleListDeployments)
 		r.With(s.submissionLimiter.middleware).Post("/", s.handleCreateDeployment)
+		// Readable URL, matching the /state/:code/:slug route in the app.
+		// Registered before /{id} so "by-slug" is never taken for an id.
+		r.Get("/by-slug/{state}/{slug}", s.handleGetDeploymentBySlug)
 		r.Get("/{id}", s.handleGetDeployment)
 		// The cameras attributed to one record. Keeps the map and the
 		// records from behaving as two unrelated datasets.
