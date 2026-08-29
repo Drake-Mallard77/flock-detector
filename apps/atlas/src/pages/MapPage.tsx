@@ -168,9 +168,9 @@ function themeColor(name: string, fallback: string): string {
  * Whether markercluster is currently drawing this marker on its own rather
  * than hiding it inside a bubble.
  *
- * The cast is a typings gap, not a lie: /leaflet.markercluster declares
- * getVisibleParent for L.Marker, while these are L.CircleMarker. Both are
- * Layers and markercluster handles either at runtime.
+ * The cast is a typings gap, not a lie: the markercluster type definitions
+ * declare getVisibleParent for L.Marker, while these are L.CircleMarker.
+ * Both are Layers and markercluster handles either at runtime.
  */
 function isUnclustered(cluster: L.MarkerClusterGroup, marker: L.CircleMarker): boolean {
   return cluster.getVisibleParent(marker as unknown as L.Marker) === (marker as unknown as L.Marker);
@@ -199,6 +199,10 @@ export default function MapPage() {
   const refetchTimer = useRef<number | undefined>(undefined);
   // Guards against out-of-order responses; see loadCameras.
   const loadToken = useRef(0);
+  // Draws the direction wedges for the markers most recently added. Held in
+  // a ref because the cluster group's chunkProgress callback is registered
+  // once, when the map is created, and needs to reach the current one.
+  const drawWedges = useRef<(() => void) | null>(null);
   const baseLayer = useRef<L.TileLayer | null>(null);
   const labelLayer = useRef<L.TileLayer | null>(null);
   const { active: theme } = useTheme();
@@ -272,6 +276,13 @@ export default function MapPage() {
     const cluster = L.markerClusterGroup({
       chunkedLoading: true,
       showCoverageOnHover: false,
+      // Clustering is only settled once the final chunk is in, so this is
+      // where the direction wedges can ask which markers ended up standing
+      // alone. Registered here rather than after addLayers because that
+      // returns before the work is done.
+      chunkProgress: (processed: number, total: number) => {
+        if (processed >= total) drawWedges.current?.();
+      },
     });
     clusterLayer.current = cluster;
     m.addLayer(cluster);
@@ -448,9 +459,17 @@ export default function MapPage() {
       // Only for cameras that record a direction. Drawing a default heading
       // for the other 12% would invent a fact on a map whose whole claim is
       // that it doesn't.
-      const wedgeLayer = aggregateLayer.current;
-      let drawn = 0;
-      if (wedgeLayer) {
+      // Deferred until markercluster has finished building its tree.
+      //
+      // chunkedLoading spreads addLayers across timeouts, so immediately
+      // after the call getVisibleParent has nothing to answer with and
+      // reports every marker as clustered — which is why the first version
+      // of this drew no wedges at all. chunkProgress fires when the last
+      // chunk lands; that's the point the question can be asked.
+      drawWedges.current = () => {
+        const wedgeLayer = aggregateLayer.current;
+        if (!wedgeLayer) return;
+        let drawn = 0;
         for (const { camera, marker } of markers) {
           if (camera.direction === undefined || camera.direction === null) continue;
           // getVisibleParent returns the cluster a marker is hidden inside,
@@ -473,8 +492,8 @@ export default function MapPage() {
           ).addTo(wedgeLayer);
           drawn++;
         }
-      }
-      setShowingWedges(drawn > 0);
+        setShowingWedges(drawn > 0);
+      };
 
       setCount(cameras.length);
       setTruncated(cameras.length >= API_LIMIT);
