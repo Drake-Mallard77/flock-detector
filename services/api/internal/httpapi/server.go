@@ -60,6 +60,9 @@ func (s *Server) Router() http.Handler {
 		r.Get("/", s.handleListDeployments)
 		r.With(s.submissionLimiter.middleware).Post("/", s.handleCreateDeployment)
 		r.Get("/{id}", s.handleGetDeployment)
+		// The cameras attributed to one record. Keeps the map and the
+		// records from behaving as two unrelated datasets.
+		r.Get("/{id}/cameras", s.handleDeploymentCameras)
 		r.With(s.requireRole("moderator", "admin")).Post("/{id}/review", s.handleReviewDeployment)
 		// Bulk path exists for the OSM-derived candidate queue, which runs
 		// to hundreds of records; reviewing those one at a time isn't

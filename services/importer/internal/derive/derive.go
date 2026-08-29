@@ -184,3 +184,43 @@ func ReclassifyPending(ctx context.Context, pool *pgxpool.Pool,
 	}
 	return updated, nil
 }
+
+// LinkCameras attaches imported cameras to the deployment derived from them.
+//
+// camera_sightings.deployment_id existed from the first migration and was
+// never populated — 136,008 cameras, none linked — so the map and the
+// records behaved as two unrelated datasets. The map could say "cameras
+// here" and a record could say "97 documented units", and nothing joined
+// the two.
+//
+// The join is (operator, state), which is exactly how Create() derived the
+// record in the first place: agency_name is the operator verbatim. Matching
+// case-insensitively on trimmed values links 1,142 of 1,150 deployments;
+// the residue is OSM operator strings that differ from the stored agency
+// name by more than whitespace.
+//
+// Only NULL links are filled. A moderator who attaches a camera to a
+// different record has made a judgement, and a weekly job should not
+// quietly overturn it.
+//
+// The 85% of cameras with no operator tag in OSM stay unlinked. That is the
+// data being honest rather than a gap to paper over — inferring an owner
+// from proximity would manufacture attributions this project exists to
+// avoid making.
+func LinkCameras(ctx context.Context, pool *pgxpool.Pool) (int64, error) {
+	tag, err := pool.Exec(ctx, `
+		UPDATE camera_sightings c
+		SET deployment_id = d.id,
+		    updated_at    = now()
+		FROM deployments d
+		WHERE c.deployment_id IS NULL
+		  AND c.operator IS NOT NULL
+		  AND c.state IS NOT NULL
+		  AND c.state = d.state
+		  AND lower(btrim(c.operator)) = lower(btrim(d.agency_name))
+	`)
+	if err != nil {
+		return 0, fmt.Errorf("link cameras to deployments: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}

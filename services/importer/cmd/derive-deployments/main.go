@@ -116,6 +116,15 @@ func main() {
 		}
 	}
 
-	log.Printf("done: groups=%d created=%d already-present=%d skipped=%d",
-		stats.Groups, stats.Created, stats.Existing, stats.Skipped)
+	// Runs last, so cameras behind records created in this same pass get
+	// linked immediately rather than waiting a week for the next run.
+	linked, err := derive.LinkCameras(ctx, pool)
+	if err != nil {
+		log.Printf("linking cameras to deployments: %v", err)
+	} else {
+		log.Printf("linked %d camera(s) to their deployment", linked)
+	}
+
+	log.Printf("done: groups=%d created=%d already-present=%d skipped=%d linked=%d",
+		stats.Groups, stats.Created, stats.Existing, stats.Skipped, linked)
 }

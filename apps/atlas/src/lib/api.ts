@@ -300,3 +300,28 @@ export async function searchPlaces(query: string, signal?: AbortSignal): Promise
       : undefined,
   }));
 }
+
+export interface DeploymentCamera {
+  lat: number;
+  lng: number;
+  direction?: number;
+}
+
+export interface DeploymentCameras {
+  /**
+   * Camera locations attributed to this agency.
+   *
+   * Not the same figure as the record's documented_units, and usually
+   * lower: documented_units is what the evidence says the agency operates,
+   * while this counts the ones OpenStreetMap contributors have mapped and
+   * tagged with an operator. Presenting either as the other would overstate
+   * what's actually known.
+   */
+  linked: number;
+  cameras: DeploymentCamera[];
+}
+
+/** Camera locations linked to one deployment record. */
+export function listDeploymentCameras(id: string) {
+  return request<DeploymentCameras>(`/deployments/${encodeURIComponent(id)}/cameras`);
+}

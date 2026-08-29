@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import "leaflet.markercluster";
 
@@ -46,6 +47,75 @@ const MAX_ZOOM = 19;
 // Wyoming at the same zoom holds none, and any fixed zoom threshold is
 // therefore wrong for one of them.
 const RAW_POINT_THRESHOLD = 2000;
+
+// Default view: the continental US.
+const DEFAULT_CENTER: [number, number] = [39.8, -98.5];
+const DEFAULT_ZOOM = 4;
+
+/**
+ * The map's view and filters live in the URL.
+ *
+ * Without this a map view can't be linked to. Someone looking at the
+ * cameras around one city has no way to send that to anyone, cite it, or
+ * bookmark it — reloading dropped them back to the whole country. For a
+ * public-records project the citable link is close to the point.
+ *
+ * Centre and zoom rather than a bounding box: a bbox reproduces a
+ * different view on a different sized window, while centre+zoom shows the
+ * same place everywhere. It also matches what every other map on the web
+ * puts in its URL, so the format is guessable.
+ *
+ * Five decimal places is a little over a metre — far finer than this data
+ * claims to be, and enough to keep the URL short.
+ */
+function readViewFromParams(params: URLSearchParams): {
+  center: [number, number];
+  zoom: number;
+} {
+  const lat = Number(params.get("lat"));
+  const lng = Number(params.get("lng"));
+  const zoom = Number(params.get("z"));
+  // Number("") is 0, so every value is range-checked rather than tested for
+  // NaN alone — otherwise a missing lat silently means the equator.
+  const valid =
+    Number.isFinite(lat) && Math.abs(lat) <= 90 &&
+    Number.isFinite(lng) && Math.abs(lng) <= 180 &&
+    Number.isFinite(zoom) && zoom >= 1 && zoom <= MAX_ZOOM &&
+    params.has("lat") && params.has("lng") && params.has("z");
+
+  return valid
+    ? { center: [lat, lng], zoom }
+    : { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM };
+}
+
+// URL values are validated against the same sets the API accepts, not cast.
+// A hand-edited or truncated link would otherwise send a value the API
+// rejects with a 400, turning a slightly wrong URL into an error page
+// instead of a map with one filter ignored.
+const SOURCE_VALUES = ["osm_import", "user_submission"] as const;
+const STATUS_VALUES = ["confirmed", "under_review"] as const;
+
+function readFiltersFromParams(params: URLSearchParams): CameraFilters {
+  const out: CameraFilters = {};
+
+  const source = params.get("source");
+  if (source && (SOURCE_VALUES as readonly string[]).includes(source)) {
+    out.source = source as CameraFilters["source"];
+  }
+
+  const status = params.get("status");
+  if (status && (STATUS_VALUES as readonly string[]).includes(status)) {
+    out.status = status as CameraFilters["status"];
+  }
+
+  // Manufacturer is free text by nature — the list comes from the data and
+  // changes as OSM contributors add vendors — so it can't be checked
+  // against a fixed set. An unknown value simply matches nothing.
+  const manufacturer = params.get("manufacturer");
+  if (manufacturer) out.manufacturer = manufacturer;
+
+  return out;
+}
 
 /**
  * Leaflet, not MapLibre GL.
@@ -130,7 +200,19 @@ export default function MapPage() {
   // wider screens, so this state is inert there.
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<CameraFilters>({});
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Read once. After mount the map itself owns the view and writes to the
+  // URL; treating the URL as the source of truth on every render would
+  // fight Leaflet for control and re-centre the map mid-drag.
+  const initialView = useRef(readViewFromParams(searchParams));
+  const [filters, setFilters] = useState<CameraFilters>(() =>
+    readFiltersFromParams(searchParams),
+  );
+  // setSearchParams identity changes each render; the map's event handlers
+  // are registered once, so they read it through a ref.
+  const setSearchParamsRef = useRef(setSearchParams);
+  setSearchParamsRef.current = setSearchParams;
   const [manufacturers, setManufacturers] = useState<ManufacturerCount[]>([]);
 
   // Map event handlers are registered once, so reading `filters` directly
@@ -147,8 +229,8 @@ export default function MapPage() {
     if (!container.current || map.current) return;
 
     const m = L.map(container.current, {
-      center: [39.8, -98.5], // continental US
-      zoom: 4,
+      center: initialView.current.center,
+      zoom: initialView.current.zoom,
       worldCopyJump: true,
       // Zoom buttons moved off the top-left, where they sat on top of the
       // filter bar and clipped the search input.
@@ -198,6 +280,7 @@ export default function MapPage() {
     m.on("moveend", () => {
       if (refetchTimer.current) window.clearTimeout(refetchTimer.current);
       refetchTimer.current = window.setTimeout(() => void loadCameras(m), 300);
+      writeViewToUrl(m);
     });
 
     return () => {
@@ -297,12 +380,23 @@ export default function MapPage() {
           c.direction !== undefined && c.direction !== null
             ? ` · facing ${Number(c.direction)}°`
             : "";
+        // The other half of the camera/record join: from a dot on the map to
+        // the agency it's attributed to. Only present when the camera
+        // carries an operator tag that matched a record — about 15% of
+        // imported cameras — so the link is offered rather than assumed.
+        const recordLink = c.deployment_id
+          ? `<div class="popup-record"><a href="/deployments/${encodeURIComponent(
+              c.deployment_id,
+            )}">View the agency record</a></div>`
+          : "";
+
         marker.bindPopup(
           `<h3>${escapeHtml(c.manufacturer ?? "ALPR camera")}</h3>
            <div>${c.camera_type ? escapeHtml(c.camera_type) : "Type not recorded"}${heading}</div>
            <div class="popup-source">${
              c.source === "osm_import" ? "Source: OpenStreetMap" : "Source: community report"
-           }</div>`,
+           }</div>
+           ${recordLink}`,
         );
         return marker;
       });
@@ -388,6 +482,38 @@ export default function MapPage() {
       else next[key] = value as never;
       return next;
     });
+
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        return next;
+      },
+      // Changing a filter is a deliberate act, so unlike panning it earns a
+      // history entry — Back should undo the filter.
+      { replace: false },
+    );
+  }
+
+  // Writes the current centre and zoom to the query string.
+  //
+  // replace: true, because panning a map is exploration, not navigation.
+  // Pushing an entry per pan would bury whatever page the visitor arrived
+  // from under dozens of near-identical map states, and Back would crawl
+  // through them instead of leaving the map.
+  function writeViewToUrl(m: L.Map) {
+    const c = m.getCenter();
+    setSearchParamsRef.current(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("lat", c.lat.toFixed(5));
+        next.set("lng", c.lng.toFixed(5));
+        next.set("z", String(m.getZoom()));
+        return next;
+      },
+      { replace: true },
+    );
   }
 
   return (

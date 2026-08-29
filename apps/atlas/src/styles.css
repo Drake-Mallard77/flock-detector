@@ -1255,3 +1255,59 @@ button.primary:hover:not(:disabled) {
     min-height: 44px;
   }
 }
+
+/* --- Record map ------------------------------------------------------
+   The cameras attributed to one agency, on its record page. */
+.record-map-wrap {
+  margin: 0 0 1.75rem;
+}
+
+.record-map {
+  height: 20rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  /* Leaflet paints tiles to the element's corners, which would otherwise
+     square off the rounded border. */
+  overflow: hidden;
+}
+
+.record-map-note {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Shown instead of a map when nothing is linked — the common case, since
+   only about 15% of OSM camera nodes carry an operator tag. An empty map
+   would read as "this agency has no cameras", which is a different and
+   false claim. */
+.record-map-empty {
+  margin: 0 0 1.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 42rem;
+}
+
+@media (max-width: 640px) {
+  .record-map {
+    height: 14rem;
+  }
+}
+
+/* Link from a camera popup to the agency record it's attributed to. */
+.popup-record {
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--border);
+}
+
+.popup-record a {
+  font-size: 0.82rem;
+  font-weight: 550;
+  color: var(--brand);
+}
