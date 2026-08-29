@@ -399,3 +399,31 @@ export function mergeDeployment(survivorId: string, duplicateId: string) {
     { method: "POST", body: JSON.stringify({ duplicate_id: duplicateId }) },
   );
 }
+
+export interface VerifyRequest {
+  status: DeploymentStatus;
+  evidence_type: EvidenceType;
+  source_links: string[];
+  documented_units?: number;
+  notes?: string;
+}
+
+/**
+ * Promotes a published record to one backed by public records.
+ *
+ * Separate from reviewDeployment, which is a yes/no on an unvetted
+ * candidate. The API refuses to mark a record confirmed without a
+ * public-records evidence type and at least one source link — confirming an
+ * OSM-derived record on the strength of the OSM import would be circular.
+ */
+export function verifyDeployment(id: string, body: VerifyRequest) {
+  return request<{
+    id: string;
+    status: string;
+    evidence_type: string;
+    source_links: string[];
+  }>(`/deployments/${encodeURIComponent(id)}/verify`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}

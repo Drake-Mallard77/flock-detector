@@ -1536,3 +1536,121 @@ button.primary:hover:not(:disabled) {
   background: transparent;
   border: 0;
 }
+
+/* --- Verification queue (Review desk) --------------------------------- */
+.verify {
+  margin: 0 0 2rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--status-confirmed);
+  border-radius: 8px;
+}
+
+.verify h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.verify-lede {
+  margin: 0.4rem 0 1rem;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 46rem;
+}
+
+.verify-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.verify-list > li {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.verify-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.75rem;
+}
+
+.verify-row a {
+  font-weight: 600;
+  text-decoration: none;
+  display: block;
+}
+
+.verify-meta {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.verify-row button,
+.verify-actions button {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--brand);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--brand);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.verify-row button:disabled,
+.verify-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.verify-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.verify-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.verify-form input,
+.verify-form select {
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+  max-width: 34rem;
+}
+
+.verify-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.verify-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}

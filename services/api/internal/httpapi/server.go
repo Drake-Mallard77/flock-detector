@@ -79,6 +79,10 @@ func (s *Server) Router() http.Handler {
 		// records from behaving as two unrelated datasets.
 		r.Get("/{id}/cameras", s.handleDeploymentCameras)
 		r.With(s.requireRole("moderator", "admin")).Post("/{id}/review", s.handleReviewDeployment)
+		// Promotes a published record to one backed by public records. Kept
+		// separate from /review because it demands the evidence, where
+		// /review is a yes/no on an unvetted candidate.
+		r.With(s.requireRole("moderator", "admin")).Post("/{id}/verify", s.handleVerifyDeployment)
 		// Bulk path exists for the OSM-derived candidate queue, which runs
 		// to hundreds of records; reviewing those one at a time isn't
 		// realistic. Same role gate as the single-record path.

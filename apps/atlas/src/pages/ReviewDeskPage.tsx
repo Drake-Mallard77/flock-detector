@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import DuplicateResolver from "../components/DuplicateResolver";
+import VerificationQueue from "../components/VerificationQueue";
 import { Link } from "react-router-dom";
 
 import GoogleSignIn from "../components/GoogleSignIn";
@@ -194,6 +195,11 @@ export default function ReviewDeskPage() {
       {/* Above the review queue: a duplicate is a defect in what is already
           published, while the queue is about what to publish next. */}
       <DuplicateResolver />
+
+      {/* Below duplicates, above the candidate queue: a duplicate is a
+          defect in what is published, verification is the standing work,
+          and the candidate queue is usually empty. */}
+      <VerificationQueue />
 
       {queue && queue.length > 0 && (
         <div className="review-bulk">
