@@ -1,0 +1,42 @@
+/* Kept beside the component rather than in styles.css so this outage
+   banner can be added and later removed as one self-contained unit. */
+
+.data-notice {
+  /* Amber, not red. The site is working and the outage is temporary and
+     expected — red would read as "this page is broken", which overstates
+     it and is the wrong first impression of a records project. */
+  background: #fdf6e3;
+  border-bottom: 1px solid #e0c97f;
+  color: #5c4813;
+  padding: 0.7rem 1.25rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.data-notice strong {
+  font-weight: 650;
+}
+
+/* Explicit dark values rather than the theme tokens: those are tuned for
+   the site's blue, and an amber notice built from them came out muddy in
+   dark mode and nearly invisible in light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .data-notice {
+    background: #33280d;
+    border-bottom-color: #6b5620;
+    color: #f0dfae;
+  }
+}
+
+:root[data-theme="dark"] .data-notice {
+  background: #33280d;
+  border-bottom-color: #6b5620;
+  color: #f0dfae;
+}
+
+@media (max-width: 640px) {
+  .data-notice {
+    padding: 0.6rem 0.9rem;
+    font-size: 0.85rem;
+  }
+}

@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 
+import DataNotice from "./components/DataNotice";
 import ThemeToggle from "./components/ThemeToggle";
 import { useTheme } from "./lib/theme";
 
@@ -120,6 +121,11 @@ export default function App() {
           <ThemeToggle preference={preference} onChange={setPreference} />
         </nav>
       </header>
+
+      {/* Below the header so the site still identifies itself first, above
+          main so it is read before the empty page it explains. Renders
+          nothing when the data is healthy. */}
+      <DataNotice />
 
       {/* tabIndex -1 so the skip link can move focus here, not just scroll.
           Without it the browser scrolls but focus stays behind, and the
